@@ -1,6 +1,8 @@
 package com.keyloop.web;
 
+import com.keyloop.dto.CustomerView;
 import com.keyloop.dto.VehicleView;
+import com.keyloop.repository.CustomerRepository;
 import com.keyloop.repository.DealershipRepository;
 import com.keyloop.repository.ServiceTypeRepository;
 import com.keyloop.repository.VehicleRepository;
@@ -8,6 +10,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalTime;
@@ -24,13 +27,16 @@ public class ReferenceDataController {
     private final DealershipRepository dealershipRepository;
     private final ServiceTypeRepository serviceTypeRepository;
     private final VehicleRepository vehicleRepository;
+    private final CustomerRepository customerRepository;
 
     public ReferenceDataController(DealershipRepository dealershipRepository,
                                    ServiceTypeRepository serviceTypeRepository,
-                                   VehicleRepository vehicleRepository) {
+                                   VehicleRepository vehicleRepository,
+                                   CustomerRepository customerRepository) {
         this.dealershipRepository = dealershipRepository;
         this.serviceTypeRepository = serviceTypeRepository;
         this.vehicleRepository = vehicleRepository;
+        this.customerRepository = customerRepository;
     }
 
     public record DealershipView(Long id, String name, String address, Double rating,
@@ -61,9 +67,18 @@ public class ReferenceDataController {
                 .toList();
     }
 
-    @Operation(summary = "List vehicles")
+    @Operation(summary = "List customers (account picker)")
+    @GetMapping("/customers")
+    public List<CustomerView> customers() {
+        return customerRepository.findAll().stream()
+                .map(c -> new CustomerView(c.getId(), c.getName()))
+                .toList();
+    }
+
+    @Operation(summary = "List vehicles, optionally scoped to one customer")
     @GetMapping("/vehicles")
-    public List<VehicleView> vehicles() {
-        return vehicleRepository.listAll();
+    public List<VehicleView> vehicles(@RequestParam(required = false) Long customerId) {
+        return customerId == null ? vehicleRepository.listAll()
+                : vehicleRepository.listByCustomer(customerId);
     }
 }

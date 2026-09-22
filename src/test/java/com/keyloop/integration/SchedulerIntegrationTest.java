@@ -28,6 +28,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.everyItem;
+import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -115,6 +117,19 @@ class SchedulerIntegrationTest {
         assertThat(other.status()).isEqualTo("CONFIRMED");
 
         assertThat(appointmentRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void vehiclesAreScopedToTheSelectedCustomer() throws Exception {
+        mockMvc.perform(get("/api/v1/customers"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(4));
+
+        // Customer 1 (Alice) owns vehicles 1, 3, 9 — and only those come back.
+        mockMvc.perform(get("/api/v1/vehicles").param("customerId", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(3))
+                .andExpect(jsonPath("$[*].customerName", everyItem(is("Alice Johnson"))));
     }
 
     @Test

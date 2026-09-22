@@ -29,4 +29,12 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
             order by v.id
             """)
     List<VehicleView> listAll();
+
+    @Query("""
+            select new com.keyloop.dto.VehicleView(v.id, v.vin, v.make, v.model, c.name)
+            from Vehicle v join v.customer c
+            where c.id = :customerId
+            order by v.id
+            """)
+    List<VehicleView> listByCustomer(@Param("customerId") Long customerId);
 }

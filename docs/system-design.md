@@ -183,7 +183,8 @@ Trade-off and alternatives (documented for reviewers):
 | GET | `/api/v1/appointments/{id}` | Fetch appointment | 200 | 404 |
 | GET | `/api/v1/appointments/availability` | Non-binding probe (one window) | 200 | 404 |
 | GET | `/api/v1/appointments/slots` | Day view of 30-min starts (powers the UI) | 200 | 404 |
-| GET | `/api/v1/dealerships`, `/service-types`, `/vehicles` | Reference data | 200 | — |
+| GET | `/api/v1/customers` | Account picker (demo, no auth) | 200 | — |
+| GET | `/api/v1/dealerships`, `/service-types`, `/vehicles?customerId=` | Reference data (vehicles scope to a customer) | 200 | — |
 
 A **Quick-Book front-end** (`src/main/resources/static/index.html`, served at
 `/`) demonstrates the user experience — a service-first flow (service →
@@ -192,7 +193,10 @@ lists real dealerships/services/vehicles, computes distance from stored
 coordinates (haversine), reads day availability from `GET /appointments/slots`,
 and books via `POST /appointments` — so it exercises the same skill-match,
 duration and resource-capacity rules the backend enforces (and shows a 409 if a
-slot is taken between load and booking).
+slot is taken between load and booking). An account picker in the header
+(`GET /customers`) scopes the vehicle list to the selected customer
+(`GET /vehicles?customerId=`) — a stand-in for the authenticated principal that,
+in production, the gateway would supply so a user only ever sees their own vehicles.
 
 Machine-readable contract: [`docs/openapi.json`](./openapi.json) (also served live
 at `/v3/api-docs`, with Swagger UI at `/swagger-ui.html`). Error bodies share one

@@ -58,7 +58,8 @@ that proves no overbooking** (8 threads on a capacity-2 slot → exactly 2 confi
 | `GET`  | `/api/v1/appointments/{id}` | Get an appointment |
 | `GET`  | `/api/v1/appointments/availability` | Non-binding availability probe (single window) |
 | `GET`  | `/api/v1/appointments/slots` | Day view: every 30-min start for a dealership + service on a date |
-| `GET`  | `/api/v1/dealerships` · `/api/v1/service-types` · `/api/v1/vehicles` | Reference data |
+| `GET`  | `/api/v1/customers` | Account picker (demo, no auth) |
+| `GET`  | `/api/v1/dealerships` · `/api/v1/service-types` · `/api/v1/vehicles?customerId=` | Reference data (vehicles scope to a customer) |
 
 ### Try it (mocked client via cURL)
 

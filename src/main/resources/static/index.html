@@ -29,9 +29,12 @@
   .logo{ display:flex; align-items:center; gap:10px; font-weight:750; color:var(--ink); letter-spacing:-.01em; }
   .logo .mark{ width:30px; height:30px; border-radius:8px; background:var(--brand); display:grid; place-items:center; color:#fff; }
   .logo small{ display:block; font-family:var(--mono); font-size:.6rem; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:600; }
-  .home{ margin-left:auto; display:flex; align-items:center; gap:8px; font-size:.82rem; color:var(--muted); background:var(--raise); border:1px solid var(--line); padding:7px 12px; border-radius:999px; }
+  .acct{ margin-left:auto; display:flex; align-items:center; gap:6px; background:var(--surface); border:1px solid var(--line); padding:5px 10px 5px 12px; border-radius:999px; color:var(--brand); }
+  .acct select{ width:auto; border:0; background:none; font-family:var(--sans); font-weight:650; font-size:.86rem; color:var(--ink); padding:2px 2px; cursor:pointer; }
+  .acct select:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
+  .home{ display:flex; align-items:center; gap:8px; font-size:.82rem; color:var(--muted); background:var(--raise); border:1px solid var(--line); padding:7px 12px; border-radius:999px; }
   .home .mono{ color:var(--ink); }
-  @media(max-width:560px){ .home .lbl{ display:none; } }
+  @media(max-width:560px){ .home{ display:none; } }
 
   .lane{ max-width:1080px; margin:0 auto; padding:20px clamp(16px,4vw,32px) 4px; }
   .lane ol{ list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(4,1fr); gap:0; }
@@ -174,6 +177,10 @@
       </span>
       <span>Quick&nbsp;Book<small>Vehicle service</small></span>
     </div>
+    <div class="acct" title="Signed-in account (demo)">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+      <select id="user" aria-label="Account"></select>
+    </div>
     <div class="home"><span class="lbl">Home</span> <span class="mono">12 Oak St</span></div>
   </div>
 </div>
@@ -224,14 +231,15 @@ const ICONS = {
   _pin:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>',
   _clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   _star:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.8 5.9 21.4 7.3 14.6 2.2 9.9l6.9-.8z"/></svg>',
+  _user:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
   _check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'
 };
 const icon = code => ICONS[code] || ICONS._clock;
 const DAYS = 4;
 
 /* ============================ STATE + HELPERS ============================ */
-let SERVICES=[], DEALERS=[], VEHICLES=[];
-const state = { step:0, max:0, service:null, dealer:null, day:0, slot:null, vehicle:0, appt:null };
+let SERVICES=[], DEALERS=[], VEHICLES=[], CUSTOMERS=[];
+const state = { step:0, max:0, service:null, dealer:null, day:0, slot:null, vehicle:0, userId:null, appt:null };
 const earliestCache = {};   // key `${dealerId}:${serviceId}` -> {offered, day, start}
 
 const $ = s => document.querySelector(s);
@@ -387,14 +395,18 @@ function renderConfirm(){
       <div class="cf-row"><span class="ic">${icon(svc.code)}</span><span><span class="lbl">Service</span><br><span class="val">${svc.name} · ${svc.durationMinutes} min</span></span><button class="edit" data-go="0">Edit</button></div>
       <div class="cf-row"><span class="ic">${ICONS._pin}</span><span><span class="lbl">Location</span><br><span class="val">${d.name}</span> <span style="color:var(--muted);font-family:var(--mono);font-size:.82rem">${d.distance.toFixed(1)} km · ${d.address}</span></span><button class="edit" data-go="1">Edit</button></div>
       <div class="cf-row"><span class="ic">${ICONS._clock}</span><span><span class="lbl">Time</span><br><span class="val">${dayLabel(state.day)} ${dayDate(state.day).toLocaleDateString(undefined,{month:'short',day:'numeric'})} · ${fmt12(state.slot)}–${fmt12(endStr)}</span></span><button class="edit" data-go="2">Edit</button></div>
-      <div class="veh"><label for="veh">Which vehicle?</label><select id="veh"></select></div>
+      <div class="veh"><label for="veh">Which of your vehicles?</label><select id="veh"></select></div>
     </div>
   </section>`);
   s.querySelector('.back').onclick=()=>go(2);
   s.querySelectorAll('.edit').forEach(btn=> btn.onclick=()=>go(+btn.dataset.go));
   const sel=s.querySelector('#veh');
-  VEHICLES.forEach((v,i)=> sel.appendChild(el(`<option value="${i}" ${i===state.vehicle?'selected':''}>${v.make} ${v.model} · ${v.customerName}</option>`)));
-  sel.onchange=()=>{ state.vehicle=+sel.value; };
+  if(!VEHICLES.length){
+    sel.innerHTML = '<option>No vehicles on this account</option>'; sel.disabled = true;
+  } else {
+    VEHICLES.forEach((v,i)=> sel.appendChild(el(`<option value="${i}" ${i===state.vehicle?'selected':''}>${v.make} ${v.model} · VIN …${v.vin.slice(-5)}</option>`)));
+    sel.onchange=()=>{ state.vehicle=+sel.value; };
+  }
   return s;
 }
 
@@ -438,7 +450,7 @@ function railHtml(){
   const svc=state.service, d=state.dealer;
   const row=(k,v,empty)=>`<div class="ri"><span class="k">${k}</span><span class="v ${empty?'empty':''}">${v}</span></div>`;
   const timeVal = state.slot!=null ? `${dayLabel(state.day)} ${fmt12(state.slot)}<small>${dayDate(state.day).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</small>` : '—';
-  const canConfirm = svc && d && state.slot!=null && state.step===3;
+  const canConfirm = svc && d && state.slot!=null && state.step===3 && VEHICLES.length>0;
   return `<h3>Your booking</h3><div class="items">
     ${row('Service', svc?`${svc.name}<small>${svc.durationMinutes} min</small>`:'Not chosen', !svc)}
     ${row('Where', d?`${d.name}<small>${d.distance.toFixed(1)} km away</small>`:'Not chosen', !d)}
@@ -452,7 +464,7 @@ function renderRail(){
   $('#rail').innerHTML = railHtml();
   const svc=state.service, d=state.dealer;
   $('#mbar').innerHTML = `<div class="amt">${money(svc?svc.price:0)}<small>${svc?svc.name:'Choose a service'}</small></div>
-    <button class="cta" id="mCta" ${svc&&d&&state.slot!=null&&state.step===3?'':'disabled'}>Confirm booking</button>`;
+    <button class="cta" id="mCta" ${svc&&d&&state.slot!=null&&state.step===3&&VEHICLES.length?'':'disabled'}>Confirm booking</button>`;
   const rc=$('#railCta'); if(rc && state.step===3) rc.onclick=book;
   const mc=$('#mCta'); if(mc && state.step===3) mc.onclick=book;
 }
@@ -479,14 +491,32 @@ function go(step){
   render();
 }
 
+async function loadVehicles(customerId){
+  VEHICLES = await api('/vehicles?customerId='+customerId);
+  state.vehicle = 0;
+}
+function fillUserPicker(){
+  const sel = $('#user');
+  sel.innerHTML = CUSTOMERS.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  sel.value = state.userId;
+  sel.onchange = async ()=>{
+    state.userId = +sel.value;
+    await loadVehicles(state.userId);
+    toast('Signed in as '+CUSTOMERS.find(c=>c.id===state.userId).name);
+    render();   // refresh so the vehicle picker + summary reflect this account
+  };
+}
 async function boot(){
   try{
-    const [svcs, deals, vehs] = await Promise.all([
-      api('/service-types'), api('/dealerships'), api('/vehicles')
+    const [custs, svcs, deals] = await Promise.all([
+      api('/customers'), api('/service-types'), api('/dealerships')
     ]);
+    CUSTOMERS = custs;
     SERVICES = svcs;
-    VEHICLES = vehs;
     DEALERS = deals.map(d=>({ ...d, distance: haversine(d.latitude, d.longitude) }));
+    state.userId = custs[0].id;
+    fillUserPicker();
+    await loadVehicles(state.userId);
     render();
   }catch(e){
     $('#stage').closest('.work').style.gridTemplateColumns='1fr';
