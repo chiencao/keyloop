@@ -8,7 +8,7 @@ appointment** linking customer, vehicle, technician and bay.
 
 - **Design document:** [`docs/system-design.md`](docs/system-design.md) — architecture, data flow, tech justification, observability, and the GenAI-usage section (Part 1).
 - **API contract:** [`docs/openapi.json`](docs/openapi.json) · live Swagger UI at `/swagger-ui.html`.
-- **Stack:** Java 21 · Spring Boot 3.5 · Spring Data JPA · Flyway · H2 (dev) / PostgreSQL (prod) · Actuator + Micrometer.
+- **Stack:** Java 21 · Spring Boot 3.5 · Spring Data JPA · Flyway · H2 (dev) / Oracle (prod, via Data Guard for DR) · Actuator + Micrometer.
 
 ## Requirements
 
@@ -28,14 +28,20 @@ migrated and seeded by Flyway. Useful URLs:
   (service → nearest/usual dealership → open slot → confirm) wired to the **live API**:
   it lists real dealerships/services/vehicles, computes distance from real coordinates,
   reads day availability from `/appointments/slots`, and books via `POST /appointments`.
+- **Admin console — `http://localhost:8080/admin`** — the dealership service desk:
+  pick a location (stand-in for staff login), see that location's requests, and
+  **sign off** completed work (or cancel) — which releases the technician + bay slot.
 - Swagger UI — `http://localhost:8080/swagger-ui.html`
 - Health — `http://localhost:8080/actuator/health`
 - Metrics (Prometheus) — `http://localhost:8080/actuator/prometheus`
 
-For production, run with PostgreSQL:
+The target **production** database is **Oracle** (with Data Guard for disaster
+recovery — see [the design doc](docs/system-design.md#8-deployment-topology--disaster-recovery)).
+The sample itself ships an H2 default plus a convenience relational profile for
+local runs (point the datasource at any JDBC URL via env vars):
 
 ```bash
-DB_URL=jdbc:postgresql://localhost:5432/scheduler DB_USERNAME=... DB_PASSWORD=... \
+DB_URL=jdbc:...//host:port/scheduler DB_USERNAME=... DB_PASSWORD=... \
   ./mvnw spring-boot:run -Dspring-boot.run.profiles=postgres
 ```
 
@@ -60,6 +66,8 @@ that proves no overbooking** (8 threads on a capacity-2 slot → exactly 2 confi
 | `GET`  | `/api/v1/appointments/slots` | Day view: every 30-min start for a dealership + service on a date |
 | `GET`  | `/api/v1/customers` | Account picker (demo, no auth) |
 | `GET`  | `/api/v1/dealerships` · `/api/v1/service-types` · `/api/v1/vehicles?customerId=` | Reference data (vehicles scope to a customer) |
+| `GET`  | `/api/v1/admin/appointments?dealershipId=&status=` | Service desk: list a location's requests |
+| `POST` | `/api/v1/admin/appointments/{id}/complete` · `/cancel` | Sign off / cancel — releases the slot |
 
 ### Try it (mocked client via cURL)
 
@@ -123,7 +131,8 @@ src/main/java/com/keyloop
 ├── web/          REST controllers + GlobalExceptionHandler
 ├── dto/          request/response records
 └── config/       OpenAPI metadata
-src/main/resources/static/index.html   Quick-Book front-end (live, served at /)
+src/main/resources/static/index.html       Quick-Book front-end (live, served at /)
+src/main/resources/static/admin/index.html  Service-desk admin console (served at /admin)
 src/main/resources/db/migration   Flyway V1 schema · V2 seed · V3 vehicles · V4 storefront data
 
 docs/             system-design.md · system-design.html · openapi.json · curl-examples.sh

@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Service Desk — Admin</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%230A3833'/%3E%3Cpath d='M6 7h12M6 12h12M6 17h8' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  *,*::before,*::after{ box-sizing:border-box; }
+  :root{
+    --bg:#EDF0F3; --surface:#FFFFFF; --raise:#F7F9FB;
+    --ink:#141C26; --body:#3B4653; --muted:#727D8A; --faint:#9AA4AF;
+    --line:#E3E7EC; --line-2:#EEF1F4;
+    --brand:#0E4A44; --brand-2:#0A3833;
+    --accent:#EE7A1E; --accent-d:#CD640F; --accent-wash:#FDF0E2; --accent-line:#F3CFA6;
+    --confirmed:#B5730F; --confirmed-bg:#FBF0DD;
+    --done:#1E8A4F; --done-bg:#E7F3EC;
+    --cancel:#8A94A0; --cancel-bg:#EEF1F4;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --shadow:0 1px 2px rgba(20,28,38,.05),0 16px 44px -30px rgba(20,28,38,.55);
+  }
+  html{ -webkit-text-size-adjust:100%; }
+  body{ margin:0; background:var(--bg); color:var(--body); font-family:var(--sans); font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased; }
+  .mono{ font-family:var(--mono); font-variant-numeric:tabular-nums; }
+
+  /* ---------- staff top bar (dark, to signal back-office) ---------- */
+  .bar{ background:var(--brand-2); color:#DCEAE7; }
+  .bar .in{ max-width:1120px; margin:0 auto; display:flex; align-items:center; gap:14px; padding:14px clamp(16px,4vw,32px); }
+  .bar .logo{ display:flex; align-items:center; gap:10px; font-weight:750; color:#fff; letter-spacing:-.01em; }
+  .bar .logo .mark{ width:30px; height:30px; border-radius:8px; background:rgba(255,255,255,.12); display:grid; place-items:center; color:#fff; }
+  .bar .logo small{ display:block; font-family:var(--mono); font-size:.6rem; letter-spacing:.16em; text-transform:uppercase; color:#8FB4AD; font-weight:600; }
+  .bar .loc{ margin-left:auto; display:flex; align-items:center; gap:12px; }
+  .bar .loc .name{ font-family:var(--mono); font-size:.85rem; color:#EAF3F1; }
+  .bar .switch{ background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.18); color:#fff; font-family:var(--mono); font-size:.76rem; padding:7px 12px; border-radius:8px; cursor:pointer; }
+  .bar .switch:hover{ background:rgba(255,255,255,.18); }
+
+  .wrap{ max-width:1120px; margin:0 auto; padding:22px clamp(16px,4vw,32px) 80px; }
+
+  /* ---------- login ---------- */
+  .login{ max-width:440px; margin:8vh auto; background:var(--surface); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); overflow:hidden; }
+  .login .top{ background:var(--brand-2); color:#fff; padding:26px 28px; }
+  .login .top .mark{ width:38px; height:38px; border-radius:10px; background:rgba(255,255,255,.12); display:grid; place-items:center; margin-bottom:14px; }
+  .login .top h1{ margin:0; font-size:1.3rem; font-weight:750; letter-spacing:-.01em; }
+  .login .top p{ margin:6px 0 0; color:#9CC0B9; font-size:.86rem; }
+  .login .body{ padding:26px 28px; }
+  .login label{ display:block; font-family:var(--mono); font-size:.68rem; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+  select{ width:100%; font-family:var(--sans); font-size:.95rem; color:var(--ink); background:var(--surface); border:1px solid var(--line); border-radius:9px; padding:12px; }
+  .login .cta{ width:100%; margin-top:18px; border:0; background:var(--accent); color:#fff; font-weight:700; font-size:1rem; padding:14px; border-radius:9px; cursor:pointer; }
+  .login .cta:hover{ background:var(--accent-d); }
+  .login .demo{ margin-top:14px; font-size:.78rem; color:var(--faint); text-align:center; }
+
+  /* ---------- dashboard ---------- */
+  .head{ display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:18px; }
+  h2{ font-size:1.35rem; color:var(--ink); margin:0; font-weight:750; letter-spacing:-.01em; }
+  .head p{ margin:5px 0 0; color:var(--muted); font-size:.9rem; max-width:60ch; }
+
+  .stats{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px; }
+  @media(max-width:640px){ .stats{ grid-template-columns:repeat(2,1fr); } }
+  .stat{ background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  .stat .n{ font-family:var(--mono); font-size:1.6rem; font-weight:700; color:var(--ink); font-variant-numeric:tabular-nums; }
+  .stat .l{ font-family:var(--mono); font-size:.64rem; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-top:2px; }
+  .stat.c .n{ color:var(--confirmed); } .stat.d .n{ color:var(--done); } .stat.x .n{ color:var(--cancel); }
+
+  .tabs{ display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap; }
+  .tab{ background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:8px 15px; font-family:var(--mono); font-size:.78rem; color:var(--muted); cursor:pointer; }
+  .tab.sel{ background:var(--ink); border-color:var(--ink); color:#fff; }
+
+  .table-wrap{ background:var(--surface); border:1px solid var(--line); border-radius:12px; overflow-x:auto; box-shadow:var(--shadow); }
+  table{ border-collapse:collapse; width:100%; min-width:820px; font-size:.86rem; }
+  thead th{ text-align:left; font-family:var(--mono); font-size:.64rem; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); padding:13px 14px; border-bottom:2px solid var(--line); white-space:nowrap; background:var(--raise); }
+  tbody td{ padding:12px 14px; border-bottom:1px solid var(--line-2); vertical-align:middle; }
+  tbody tr:last-child td{ border-bottom:0; }
+  tbody tr.terminal{ opacity:.62; }
+  td .when{ font-family:var(--mono); color:var(--ink); font-weight:600; }
+  td .sub{ color:var(--muted); font-size:.78rem; }
+  td .cust{ color:var(--ink); font-weight:600; }
+  .pill{ display:inline-flex; align-items:center; gap:6px; font-family:var(--mono); font-size:.68rem; font-weight:600; padding:3px 9px; border-radius:999px; letter-spacing:.03em; }
+  .pill::before{ content:""; width:6px; height:6px; border-radius:50%; background:currentColor; }
+  .pill.CONFIRMED{ color:var(--confirmed); background:var(--confirmed-bg); }
+  .pill.COMPLETED{ color:var(--done); background:var(--done-bg); }
+  .pill.CANCELLED{ color:var(--cancel); background:var(--cancel-bg); }
+  .actions{ display:flex; gap:7px; justify-content:flex-end; }
+  .btn{ font-family:var(--sans); font-size:.78rem; font-weight:600; border-radius:7px; padding:7px 11px; cursor:pointer; border:1px solid transparent; white-space:nowrap; }
+  .btn.signoff{ background:var(--done); color:#fff; }
+  .btn.signoff:hover{ filter:brightness(.94); }
+  .btn.cancel{ background:var(--surface); color:var(--body); border-color:var(--line); }
+  .btn.cancel:hover{ background:var(--cancel-bg); }
+  .btn:disabled{ opacity:.5; cursor:not-allowed; }
+  .muted-cell{ color:var(--faint); font-family:var(--mono); font-size:.76rem; }
+  .empty{ padding:40px; text-align:center; color:var(--muted); }
+
+  .note{ display:flex; gap:10px; align-items:flex-start; background:var(--confirmed-bg); border:1px solid #F0DDB8; color:#7A5510; border-radius:10px; padding:12px 15px; font-size:.85rem; margin-bottom:18px; }
+  .note svg{ flex:none; margin-top:1px; }
+
+  button:focus-visible,select:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .toast{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--ink); color:#fff; padding:12px 20px; border-radius:10px; font-size:.9rem; opacity:0; pointer-events:none; transition:all .3s; z-index:50; max-width:90vw; text-align:center; }
+  .toast.on{ opacity:1; transform:translateX(-50%) translateY(0); }
+  .hidden{ display:none; }
+</style>
+</head>
+<body>
+
+<!-- ===================== LOGIN (dealership selection) ===================== -->
+<div id="login">
+  <div class="login">
+    <div class="top">
+      <div class="mark"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 7h12M6 12h12M6 17h8"/></svg></div>
+      <h1>Service Desk sign-in</h1>
+      <p>Manage the appointments booked at your location.</p>
+    </div>
+    <div class="body">
+      <label for="loginDealer">Your dealership</label>
+      <select id="loginDealer"></select>
+      <button class="cta" id="enter" type="button">Enter dashboard</button>
+      <p class="demo">Demo — no password. Each location sees only its own requests.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== DASHBOARD ===================== -->
+<div id="dash" class="hidden">
+  <div class="bar">
+    <div class="in">
+      <div class="logo">
+        <span class="mark"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 7h12M6 12h12M6 17h8"/></svg></span>
+        <span>Service&nbsp;Desk<small>Admin</small></span>
+      </div>
+      <div class="loc">
+        <span class="name" id="barLoc"></span>
+        <button class="switch" id="switch" type="button">Switch location</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="head">
+      <div>
+        <h2 id="dashTitle"></h2>
+        <p>Confirmed appointments are holding a technician and a bay. Sign one off when the work is done — that releases the slot for new bookings.</p>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat c"><div class="n" id="cConfirmed">0</div><div class="l">Confirmed · holding a slot</div></div>
+      <div class="stat d"><div class="n" id="cCompleted">0</div><div class="l">Completed · signed off</div></div>
+      <div class="stat x"><div class="n" id="cCancelled">0</div><div class="l">Cancelled</div></div>
+      <div class="stat"><div class="n" id="cTotal">0</div><div class="l">Total requests</div></div>
+    </div>
+
+    <div class="note">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
+      <span>A slot is free only when no <b>Confirmed</b> appointment holds that technician + bay for the time window. <b>Sign off</b> (or Cancel) moves it out of Confirmed and immediately frees the slot.</span>
+    </div>
+
+    <div class="tabs" id="tabs">
+      <button class="tab sel" data-f="CONFIRMED" type="button">Confirmed</button>
+      <button class="tab" data-f="COMPLETED" type="button">Completed</button>
+      <button class="tab" data-f="CANCELLED" type="button">Cancelled</button>
+      <button class="tab" data-f="ALL" type="button">All</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>When</th><th>Customer</th><th>Vehicle</th><th>Service</th><th>Technician</th><th>Bay</th><th>Status</th><th style="text-align:right">Action</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div class="empty hidden" id="empty">No appointments in this view.</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API='/api/v1';
+const $=s=>document.querySelector(s);
+async function api(path, opts){
+  const r=await fetch(API+path, opts);
+  const body=await r.json().catch(()=>null);
+  if(!r.ok){ const e=new Error((body&&body.message)||('HTTP '+r.status)); e.status=r.status; throw e; }
+  return body;
+}
+function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('on'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('on'),2800); }
+
+const state={ dealerId:null, dealerName:'', filter:'CONFIRMED', appts:[] };
+
+function fmt12(hhmm){ const [h,m]=hhmm.split(':').map(Number); const ap=h<12?'AM':'PM', h12=((h+11)%12)+1; return `${h12}:${String(m).padStart(2,'0')} ${ap}`; }
+function whenCell(a){
+  const date=a.startTime.slice(0,10), st=fmt12(a.startTime.slice(11,16)), en=fmt12(a.endTime.slice(11,16));
+  return `<span class="when">${st}–${en}</span><br><span class="sub mono">${date}</span>`;
+}
+
+async function loadDealers(){
+  const deals=await api('/dealerships');
+  $('#loginDealer').innerHTML = deals.map(d=>`<option value="${d.id}" data-name="${d.name}">${d.name} · ${d.address}</option>`).join('');
+}
+async function enter(){
+  const opt=$('#loginDealer').selectedOptions[0];
+  state.dealerId=+opt.value; state.dealerName=opt.dataset.name;
+  $('#login').classList.add('hidden'); $('#dash').classList.remove('hidden');
+  $('#barLoc').textContent=state.dealerName;
+  $('#dashTitle').textContent=state.dealerName+' — requests';
+  await refresh();
+}
+async function refresh(){
+  state.appts = await api(`/admin/appointments?dealershipId=${state.dealerId}`);
+  render();
+}
+function render(){
+  const by=s=>state.appts.filter(a=>a.status===s).length;
+  $('#cConfirmed').textContent=by('CONFIRMED');
+  $('#cCompleted').textContent=by('COMPLETED');
+  $('#cCancelled').textContent=by('CANCELLED');
+  $('#cTotal').textContent=state.appts.length;
+
+  const list = state.filter==='ALL' ? state.appts : state.appts.filter(a=>a.status===state.filter);
+  const rows=$('#rows'); rows.innerHTML='';
+  $('#empty').classList.toggle('hidden', list.length>0);
+  list.forEach(a=>{
+    const confirmed = a.status==='CONFIRMED';
+    const action = confirmed
+      ? `<div class="actions"><button class="btn signoff" data-act="complete" data-id="${a.id}">Sign off ✓</button>
+         <button class="btn cancel" data-act="cancel" data-id="${a.id}">Cancel</button></div>`
+      : `<div class="actions"><span class="muted-cell">${a.status==='COMPLETED'?'released':'—'}</span></div>`;
+    const tr=document.createElement('tr'); if(!confirmed) tr.className='terminal';
+    tr.innerHTML=`<td>${whenCell(a)}</td>
+      <td><span class="cust">${a.customer.name}</span></td>
+      <td>${a.vehicle.make} ${a.vehicle.model}<br><span class="sub mono">${a.vehicle.vin.slice(-6)}</span></td>
+      <td>${a.serviceType.name}<br><span class="sub mono">${a.serviceType.durationMinutes} min</span></td>
+      <td>${a.technician.name}</td>
+      <td class="mono">${a.serviceBay.name}</td>
+      <td><span class="pill ${a.status}">${a.status}</span></td>
+      <td>${action}</td>`;
+    rows.appendChild(tr);
+  });
+  rows.querySelectorAll('button[data-act]').forEach(b=> b.onclick=()=>act(b.dataset.act, +b.dataset.id, b));
+}
+async function act(action, id, btn){
+  btn.disabled=true;
+  try{
+    const a=await api(`/admin/appointments/${id}/${action}`, { method:'POST' });
+    toast(action==='complete'
+      ? `Signed off — ${a.technician.name} & ${a.serviceBay.name} released`
+      : `Cancelled — ${a.serviceBay.name} released`);
+    await refresh();
+  }catch(e){ btn.disabled=false; toast('Failed: '+e.message); }
+}
+
+$('#tabs').addEventListener('click', e=>{
+  const t=e.target.closest('.tab'); if(!t) return;
+  state.filter=t.dataset.f;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('sel', x===t));
+  render();
+});
+$('#enter').onclick=enter;
+$('#switch').onclick=()=>{ $('#dash').classList.add('hidden'); $('#login').classList.remove('hidden'); };
+
+loadDealers().catch(e=>{ document.body.innerHTML=`<div class="login" style="margin-top:14vh"><div class="body"><h2>Can’t reach the API</h2><p>Start the backend and open <code>/admin</code> from the server.</p></div></div>`; });
+</script>
+</body>
+</html>

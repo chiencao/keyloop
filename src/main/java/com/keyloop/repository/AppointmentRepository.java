@@ -22,6 +22,20 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
                                                          @Param("from") LocalDateTime from,
                                                          @Param("to") LocalDateTime to);
 
+    /** All appointments at a dealership for the admin desk, associations fetched to avoid N+1. */
+    @Query("""
+            select a from Appointment a
+              join fetch a.dealership
+              join fetch a.customer
+              join fetch a.vehicle
+              join fetch a.technician
+              join fetch a.serviceBay
+              join fetch a.serviceType
+            where a.dealership.id = :dealershipId
+            order by a.startTime
+            """)
+    List<Appointment> findForAdmin(@Param("dealershipId") Long dealershipId);
+
     /**
      * True if the vehicle already has a CONFIRMED appointment overlapping
      * [start, end). Same half-open overlap predicate used for resources:

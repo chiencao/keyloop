@@ -45,7 +45,7 @@ flowchart LR
     end
 
     subgraph Data["Persistence"]
-      DB[("Relational DB<br/>PostgreSQL prod · H2 dev")]
+      DB[("Relational DB<br/>Oracle prod · H2 dev")]
       FW["Flyway migrations"]
     end
 
@@ -168,10 +168,38 @@ cannot both pass.
 Trade-off and alternatives (documented for reviewers):
 - *Chosen:* coarse per-dealership pessimistic lock — simplest thing that is
   provably correct; contention is naturally low (bookings per dealership/second).
-- *Finer-grained:* lock/reserve specific technician+bay rows, or add an exclusion
-  constraint (`tstzrange` + `EXCLUDE USING gist`) in PostgreSQL to let the DB
-  reject overlaps. Better peak concurrency, more complexity.
+- *Finer-grained:* lock only the specific technician + bay rows with
+  `SELECT ... FOR UPDATE` (well supported by Oracle) instead of the coarser
+  per-dealership lock. Better peak concurrency, more complexity.
 - *Optimistic:* `@Version` + retry — good when contention is rare.
+
+### Appointment lifecycle & slot release
+
+A slot is **not** freed by the clock — it is freed by a **status transition**. A
+booking is created `CONFIRMED`, which is the only status the availability queries
+count. When the work is done, the dealership's service desk records the
+**technician sign-off** (→ `COMPLETED`); a booking can also be `CANCELLED`. Either
+transition moves the appointment out of `CONFIRMED`, so that technician + bay are
+immediately available again for the window.
+
+```mermaid
+stateDiagram-v2
+    [*] --> CONFIRMED: book — reserves technician + bay
+    CONFIRMED --> COMPLETED: admin sign-off (work done)
+    CONFIRMED --> CANCELLED: cancel
+    COMPLETED --> [*]
+    CANCELLED --> [*]
+    note right of CONFIRMED
+      Only CONFIRMED holds the slot.
+      "Available" = no CONFIRMED overlap
+      on that technician AND that bay.
+    end note
+```
+
+The **admin console** (`/admin`) is where staff drive this: sign-off is the
+operational answer to "is this slot still occupied?". There is no login in the
+sample — staff pick their dealership (a stand-in for a per-location staff account)
+and see and manage only that location's requests.
 
 ---
 
@@ -185,6 +213,9 @@ Trade-off and alternatives (documented for reviewers):
 | GET | `/api/v1/appointments/slots` | Day view of 30-min starts (powers the UI) | 200 | 404 |
 | GET | `/api/v1/customers` | Account picker (demo, no auth) | 200 | — |
 | GET | `/api/v1/dealerships`, `/service-types`, `/vehicles?customerId=` | Reference data (vehicles scope to a customer) | 200 | — |
+| GET | `/api/v1/admin/appointments?dealershipId=&status=` | Service-desk: list a location's requests | 200 | — |
+| POST | `/api/v1/admin/appointments/{id}/complete` | Technician sign-off → releases the slot | 200 | 404 · 422 not CONFIRMED |
+| POST | `/api/v1/admin/appointments/{id}/cancel` | Cancel → releases the slot | 200 | 404 · 422 not CONFIRMED |
 
 A **Quick-Book front-end** (`src/main/resources/static/index.html`, served at
 `/`) demonstrates the user experience — a service-first flow (service →
@@ -209,8 +240,8 @@ shape (`ErrorResponse`: `timestamp, status, error, message, path, fieldErrors?`)
 | Choice | Why | Trade-off considered |
 |--------|-----|----------------------|
 | **Java 21 + Spring Boot 3.5** | Mature ecosystem for transactional REST; virtual-thread ready; team familiarity | Heavier than Go/Node, but the transactional/JPA story is a direct fit |
-| **Spring Data JPA / Hibernate** | Declarative repositories; the overlap check is a small JPQL query; portable across H2/Postgres | Hides SQL — mitigated by explicit indexes and reviewing generated queries |
-| **PostgreSQL (prod), H2 file (dev/test)** | Postgres gives strong transactional guarantees, row locks, and range/exclusion constraints for the future; H2 keeps the sample **runnable with zero setup** and identical SQL | SQLite/NoSQL rejected — booking needs ACID + relational integrity |
+| **Spring Data JPA / Hibernate** | Declarative repositories; the overlap check is a small JPQL query; portable across H2/Oracle | Hides SQL — mitigated by explicit indexes and reviewing generated queries |
+| **Oracle Database (prod), H2 file (dev/test)** | Oracle gives strong transactional guarantees, row-level locking, and mature high-availability/DR tooling (Data Guard, RAC); H2 keeps the sample **runnable with zero setup** | SQLite/NoSQL rejected — booking needs ACID + relational integrity |
 | **Flyway** | Versioned, reviewable schema; `ddl-auto=validate` prevents drift | Slightly more ceremony than auto-DDL — deliberate for production safety |
 | **Bean Validation** | Declarative request rules at the edge | — |
 | **springdoc-openapi** | Contract generated from code → stays in sync; Swagger UI as the “mock client” | — |
@@ -261,17 +292,87 @@ shape (`ErrorResponse`: `timestamp, status, error, message, path, fieldErrors?`)
   is kept current and individual transitives are pinned to CVE-patched versions
   via BOM override properties in `pom.xml` (each pin comments the CVEs it clears).
   Secrets stay out of source: DB credentials come from environment variables in
-  the `postgres` profile.
+  the production datasource profile.
 
 ### Roadmap (not implemented)
-Appointment cancellation/reschedule with slot release · idempotency keys ·
-technician shift calendars & breaks · multi-slot search (“next available”) ·
-outbox + events (`AppointmentConfirmed`) for notifications · Postgres GiST
-exclusion constraint as a defense-in-depth guarantee.
+Appointment reschedule (move to another slot) · real staff/customer auth ·
+idempotency keys · technician shift calendars & breaks · multi-slot search
+(“next available”) · outbox + events (`AppointmentConfirmed`) for notifications ·
+a database-level overlap guard as defense-in-depth.
 
 ---
 
-## 8. How GenAI assisted the design phase
+## 8. Deployment topology & disaster recovery
+
+The service is **stateless**, so it runs as several replicas (pods) inside a
+Kubernetes cluster fronted by an **internal load balancer** (a Kubernetes
+Service / Ingress) that only routes traffic *within* that cluster. For resilience
+we run **two clusters in two regions**, and a **network-level global load
+balancer** (DNS/anycast, L4, health-checked) routes external traffic across them.
+
+```mermaid
+flowchart TB
+    Users["Clients (web / mobile)"] --> GLB["Global load balancer<br/>DNS / anycast · L4 · health-checked"]
+
+    subgraph RA["Region A — active"]
+      direction TB
+      InA["Internal LB / Ingress<br/>routes inside the cluster only"]
+      subgraph KA["Kubernetes cluster A"]
+        A1["scheduler pod"]
+        A2["scheduler pod"]
+        A3["scheduler pod"]
+      end
+      PA[("Oracle primary")]
+      InA --> A1
+      InA --> A2
+      InA --> A3
+      A1 --> PA
+      A2 --> PA
+      A3 --> PA
+    end
+
+    subgraph RB["Region B — standby / DR"]
+      direction TB
+      InB["Internal LB / Ingress<br/>routes inside the cluster only"]
+      subgraph KB["Kubernetes cluster B"]
+        B1["scheduler pod"]
+        B2["scheduler pod"]
+      end
+      PB[("Oracle physical standby<br/>(Data Guard)")]
+      InB --> B1
+      InB --> B2
+      B1 --> PB
+      B2 --> PB
+    end
+
+    GLB -->|normal traffic| InA
+    GLB -.->|failover on health check| InB
+    PA ==>|Data Guard redo transport| PB
+```
+
+**Two-tier load balancing.** The global LB is the only externally-reachable
+entry point and decides *which region* serves a request; the internal LB inside
+each cluster decides *which pod*. They are separate concerns — the internal LB is
+never exposed outside Kubernetes.
+
+**Database & failover (active–passive with Oracle Data Guard).** Region A holds
+the **primary**; **Oracle Data Guard** ships redo to a **physical standby** in
+Region B, kept continuously in sync. Running Data Guard in **Maximum Availability**
+(SYNC redo transport) gives a near-zero RPO without sacrificing primary
+availability if the standby is briefly unreachable. Normally all write traffic
+goes to A. If A's health checks fail, **Fast-Start Failover** (an observer
+promotes the standby automatically) activates Region B and the global LB drains
+traffic to it — a low RTO with no manual step. Optionally each region runs Oracle
+**RAC** for intra-region node redundancy, with Data Guard covering the cross-region
+disaster case. Because bookings need a single writer, this active–passive shape
+(one open primary at a time) preserves the correctness guarantees from §3; an
+active–active variant would need conflict-free write routing (e.g. sharding
+bookings by dealership/region). Flyway runs the identical migrations per
+deployment, so both regions share one schema version.
+
+---
+
+## 9. How GenAI assisted the design phase
 
 GenAI (Claude) was used as a **design and implementation accelerator**, with all
 output reviewed and validated (the build is green and the concurrency guarantee
@@ -282,8 +383,8 @@ is proven by test):
   “qualified technician” = skill-matching constraint early.
 - **Concurrency reasoning** — prompted for the failure modes of check-then-act
   booking and the spectrum of fixes (pessimistic lock, optimistic `@Version`,
-  Postgres exclusion constraints). I chose the per-dealership pessimistic lock for
-  provable correctness with low complexity, and captured the trade-offs in §3.
+  database-level overlap constraints). I chose the per-dealership pessimistic lock
+  for provable correctness with low complexity, and captured the trade-offs in §3.
 - **Interval-overlap correctness** — used AI to sanity-check the half-open overlap
   predicate (`start < end AND end > start`) so back-to-back slots don’t false-conflict.
 - **Boilerplate acceleration** — generated entities, DTOs, repositories, the

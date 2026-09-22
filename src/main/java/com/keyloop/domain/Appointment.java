@@ -129,4 +129,9 @@ public class Appointment {
     public void cancel() {
         this.status = AppointmentStatus.CANCELLED;
     }
+
+    /** Technician sign-off: work is done, which releases the technician and bay for the window. */
+    public void complete() {
+        this.status = AppointmentStatus.COMPLETED;
+    }
 }

@@ -6,6 +6,7 @@ import com.keyloop.dto.BookingRequest;
 import com.keyloop.exception.DuplicateBookingException;
 import com.keyloop.exception.NoAvailabilityException;
 import com.keyloop.repository.AppointmentRepository;
+import com.keyloop.service.AdminService;
 import com.keyloop.service.BookingService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -53,6 +54,7 @@ class SchedulerIntegrationTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
     @Autowired private BookingService bookingService;
+    @Autowired private AdminService adminService;
     @Autowired private AppointmentRepository appointmentRepository;
 
     @BeforeEach
@@ -149,6 +151,50 @@ class SchedulerIntegrationTest {
                         .param("dealershipId", "3").param("serviceTypeId", "4").param("date", date))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.offered").value(false));
+    }
+
+    @Test
+    void technicianSignOffReleasesTheSlotForRebooking() {
+        // Fill both bays at the slot with distinct vehicles.
+        AppointmentResponse a1 = bookingService.book(new BookingRequest(DEALERSHIP, 1L, OIL_CHANGE, SLOT));
+        bookingService.book(new BookingRequest(DEALERSHIP, 2L, OIL_CHANGE, SLOT));
+
+        // Capacity is 2 bays -> a 3rd booking has nowhere to go.
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> bookingService.book(new BookingRequest(DEALERSHIP, 3L, OIL_CHANGE, SLOT)))
+                .isInstanceOf(NoAvailabilityException.class);
+
+        // Admin signs off a1 -> its technician + bay are released.
+        AppointmentResponse done = adminService.complete(a1.id());
+        assertThat(done.status()).isEqualTo("COMPLETED");
+
+        // The 3rd booking now succeeds, reusing the freed bay.
+        AppointmentResponse a3 = bookingService.book(new BookingRequest(DEALERSHIP, 3L, OIL_CHANGE, SLOT));
+        assertThat(a3.status()).isEqualTo("CONFIRMED");
+        assertThat(a3.serviceBay().id()).isEqualTo(a1.serviceBay().id());
+    }
+
+    @Test
+    void adminEndpointsListScopeAndRejectDoubleSignOff() throws Exception {
+        AppointmentResponse a = bookingService.book(new BookingRequest(DEALERSHIP, 1L, OIL_CHANGE, SLOT));
+
+        mockMvc.perform(get("/api/v1/admin/appointments").param("dealershipId", "1").param("status", "CONFIRMED"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].status").value("CONFIRMED"));
+
+        // Another dealership sees none of dealership 1's requests.
+        mockMvc.perform(get("/api/v1/admin/appointments").param("dealershipId", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+
+        mockMvc.perform(post("/api/v1/admin/appointments/{id}/complete", a.id()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
+
+        // Signing off again is rejected — it is no longer CONFIRMED.
+        mockMvc.perform(post("/api/v1/admin/appointments/{id}/complete", a.id()))
+                .andExpect(status().isUnprocessableEntity());
     }
 
     @Test
