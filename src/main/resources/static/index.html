@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quick Book — Vehicle Service</title>
+<style>
+  *,*::before,*::after{ box-sizing:border-box; }
+  :root{
+    --bg:#EDF0F3; --surface:#FFFFFF; --raise:#F7F9FB;
+    --ink:#141C26; --body:#3B4653; --muted:#727D8A; --faint:#9AA4AF;
+    --line:#E3E7EC; --line-2:#EEF1F4;
+    --brand:#0E4A44; --brand-2:#0A3833;
+    --accent:#EE7A1E; --accent-d:#CD640F; --accent-wash:#FDF0E2; --accent-line:#F3CFA6;
+    --avail:#1E8A4F; --avail-wash:#E7F3EC;
+    --full:#BC4A3A; --gold:#E0A100;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --shadow:0 1px 2px rgba(20,28,38,.04),0 14px 40px -28px rgba(20,28,38,.5);
+  }
+  html{ -webkit-text-size-adjust:100%; }
+  body{ margin:0; background:var(--bg); color:var(--body); font-family:var(--sans); font-size:16px; line-height:1.5; -webkit-font-smoothing:antialiased; }
+  .mono{ font-family:var(--mono); font-variant-numeric:tabular-nums; }
+
+  /* ---------- top bar ---------- */
+  .topbar{ position:sticky; top:0; z-index:20; background:rgba(255,255,255,.86); backdrop-filter:blur(10px); border-bottom:1px solid var(--line); }
+  .topbar .in{ max-width:1080px; margin:0 auto; display:flex; align-items:center; gap:14px; padding:14px clamp(16px,4vw,32px); }
+  .logo{ display:flex; align-items:center; gap:10px; font-weight:750; color:var(--ink); letter-spacing:-.01em; }
+  .logo .mark{ width:30px; height:30px; border-radius:8px; background:var(--brand); display:grid; place-items:center; color:#fff; }
+  .logo small{ display:block; font-family:var(--mono); font-size:.6rem; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:600; }
+  .home{ margin-left:auto; display:flex; align-items:center; gap:8px; font-size:.82rem; color:var(--muted); background:var(--raise); border:1px solid var(--line); padding:7px 12px; border-radius:999px; }
+  .home .mono{ color:var(--ink); }
+  @media(max-width:560px){ .home .lbl{ display:none; } }
+
+  /* ---------- stepper ---------- */
+  .lane{ max-width:1080px; margin:0 auto; padding:20px clamp(16px,4vw,32px) 4px; }
+  .lane ol{ list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(4,1fr); gap:0; }
+  .lane li{ position:relative; display:flex; flex-direction:column; align-items:center; gap:7px; padding-top:6px; cursor:default; }
+  .lane li .n{ width:30px; height:30px; border-radius:50%; display:grid; place-items:center; font-family:var(--mono); font-size:.82rem; font-weight:600; background:var(--surface); border:1.5px solid var(--line); color:var(--faint); z-index:2; transition:all .25s; }
+  .lane li .t{ font-size:.72rem; font-family:var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--faint); }
+  .lane li::before,.lane li::after{ content:""; position:absolute; top:20px; height:2px; background:var(--line); z-index:1; }
+  .lane li::before{ left:0; right:50%; } .lane li::after{ left:50%; right:0; }
+  .lane li:first-child::before,.lane li:last-child::after{ display:none; }
+  .lane li.done .n{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  .lane li.active .n{ background:var(--surface); border-color:var(--accent); color:var(--accent-d); box-shadow:0 0 0 4px var(--accent-wash); }
+  .lane li.done .t,.lane li.active .t{ color:var(--ink); }
+  .lane li.done::before,.lane li.done::after,.lane li.active::before{ background:var(--accent); }
+  .lane li.clickable{ cursor:pointer; }
+
+  /* ---------- workspace ---------- */
+  .work{ max-width:1080px; margin:0 auto; padding:18px clamp(16px,4vw,32px) 120px; display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:26px; align-items:start; }
+  @media(max-width:900px){ .work{ grid-template-columns:1fr; padding-bottom:150px; } }
+
+  .step-head{ margin:6px 0 16px; }
+  .kicker{ font-family:var(--mono); font-size:.7rem; letter-spacing:.16em; text-transform:uppercase; color:var(--accent-d); margin:0 0 6px; }
+  h1{ font-size:clamp(1.5rem,3.6vw,2rem); line-height:1.08; letter-spacing:-.02em; color:var(--ink); margin:0; font-weight:750; text-wrap:balance; }
+  .step-head p{ margin:8px 0 0; color:var(--muted); max-width:52ch; font-size:.95rem; }
+  .back{ background:none; border:0; color:var(--accent-d); font-family:var(--mono); font-size:.78rem; cursor:pointer; padding:4px 0; margin-bottom:2px; }
+  .back:hover{ text-decoration:underline; }
+
+  @media(prefers-reduced-motion:no-preference){ .panel-anim{ animation:rise .34s cubic-bezier(.22,.61,.36,1) both; } @keyframes rise{ from{opacity:0; transform:translateY(8px);} to{opacity:1;transform:none;} } }
+
+  /* service grid */
+  .svc-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px; }
+  .svc{ text-align:left; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:16px; cursor:pointer; transition:border-color .18s, box-shadow .18s, transform .18s; display:flex; flex-direction:column; gap:10px; }
+  .svc:hover{ border-color:var(--accent-line); box-shadow:var(--shadow); transform:translateY(-2px); }
+  .svc.sel{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-wash); }
+  .svc .ic{ width:38px; height:38px; border-radius:9px; background:var(--brand); color:#fff; display:grid; place-items:center; }
+  .svc .nm{ font-weight:650; color:var(--ink); }
+  .svc .ds{ font-size:.82rem; color:var(--muted); }
+  .svc .meta{ display:flex; gap:10px; align-items:center; margin-top:2px; font-family:var(--mono); font-size:.78rem; color:var(--body); }
+  .svc .price{ margin-left:auto; color:var(--ink); font-weight:600; }
+  .chip{ display:inline-flex; align-items:center; gap:5px; font-family:var(--mono); font-size:.68rem; letter-spacing:.04em; padding:2px 7px; border-radius:6px; background:var(--raise); border:1px solid var(--line); color:var(--muted); }
+
+  /* usual + dealership list */
+  .usual{ display:flex; align-items:center; gap:14px; width:100%; text-align:left; background:linear-gradient(180deg,#fff, #fffdfa); border:1.5px solid var(--accent-line); border-radius:12px; padding:16px; cursor:pointer; transition:box-shadow .18s, transform .18s; }
+  .usual:hover{ box-shadow:var(--shadow); transform:translateY(-1px); }
+  .usual .star{ width:40px; height:40px; border-radius:10px; background:var(--accent-wash); color:var(--gold); display:grid; place-items:center; flex:none; }
+  .usual .nm{ font-weight:700; color:var(--ink); }
+  .usual .sub{ font-size:.82rem; color:var(--muted); }
+  .usual .go{ margin-left:auto; font-family:var(--mono); font-size:.78rem; color:var(--accent-d); white-space:nowrap; }
+  .or{ display:flex; align-items:center; gap:12px; color:var(--faint); font-family:var(--mono); font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; margin:20px 0 12px; }
+  .or::before,.or::after{ content:""; height:1px; background:var(--line); flex:1; }
+
+  .deal{ display:flex; align-items:center; gap:14px; width:100%; text-align:left; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:14px 16px; cursor:pointer; transition:border-color .18s, box-shadow .18s, transform .18s; margin-bottom:10px; }
+  .deal:hover:not(:disabled){ border-color:var(--accent-line); box-shadow:var(--shadow); transform:translateY(-1px); }
+  .deal.sel{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-wash); }
+  .deal:disabled{ cursor:not-allowed; opacity:.62; }
+  .deal .dist{ display:flex; flex-direction:column; align-items:center; justify-content:center; width:58px; flex:none; border-right:1px solid var(--line-2); padding-right:12px; }
+  .deal .dist .km{ font-family:var(--mono); font-weight:700; color:var(--ink); font-size:1rem; }
+  .deal .dist .u{ font-family:var(--mono); font-size:.64rem; color:var(--faint); letter-spacing:.1em; }
+  .deal .main{ min-width:0; }
+  .deal .nm{ font-weight:650; color:var(--ink); display:flex; align-items:center; gap:8px; }
+  .deal .row2{ font-size:.82rem; color:var(--muted); display:flex; flex-wrap:wrap; gap:10px; margin-top:3px; }
+  .deal .rate{ color:var(--gold); font-family:var(--mono); }
+  .deal .avail{ margin-left:auto; text-align:right; flex:none; font-family:var(--mono); font-size:.76rem; }
+  .deal .avail .big{ color:var(--avail); font-weight:700; display:block; }
+  .deal .avail.none{ color:var(--full); }
+  .tag-usual{ font-family:var(--mono); font-size:.6rem; letter-spacing:.08em; text-transform:uppercase; color:var(--accent-d); background:var(--accent-wash); border:1px solid var(--accent-line); padding:1px 6px; border-radius:5px; }
+
+  /* time step */
+  .days{ display:flex; gap:8px; margin-bottom:16px; overflow-x:auto; padding-bottom:4px; }
+  .day{ flex:none; background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:9px 14px; cursor:pointer; text-align:center; font-family:var(--mono); transition:border-color .15s; }
+  .day .dow{ font-size:.66rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+  .day .dnum{ font-size:1.05rem; font-weight:700; color:var(--ink); }
+  .day.sel{ border-color:var(--accent); background:var(--accent-wash); }
+  .slots{ display:grid; grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:9px; }
+  .slot{ background:var(--surface); border:1px solid var(--line); border-radius:9px; padding:10px 8px; cursor:pointer; text-align:center; transition:border-color .15s, box-shadow .15s; }
+  .slot .tm{ font-family:var(--mono); font-weight:650; color:var(--ink); font-size:.92rem; }
+  .slot .lft{ font-family:var(--mono); font-size:.66rem; color:var(--avail); margin-top:2px; }
+  .slot:hover:not(:disabled){ border-color:var(--accent-line); }
+  .slot.sel{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-wash); }
+  .slot:disabled{ opacity:.45; cursor:not-allowed; }
+  .slot:disabled .lft{ color:var(--full); }
+  .noslots{ color:var(--muted); font-size:.9rem; padding:20px 0; }
+
+  /* confirm */
+  .confirm-card{ background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:22px; box-shadow:var(--shadow); }
+  .cf-row{ display:flex; align-items:center; gap:14px; padding:13px 0; border-bottom:1px solid var(--line-2); }
+  .cf-row:last-of-type{ border-bottom:0; }
+  .cf-row .ic{ width:36px; height:36px; border-radius:9px; background:var(--raise); color:var(--brand); display:grid; place-items:center; flex:none; }
+  .cf-row .lbl{ font-family:var(--mono); font-size:.66rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+  .cf-row .val{ font-weight:650; color:var(--ink); }
+  .cf-row .edit{ margin-left:auto; background:none; border:0; color:var(--accent-d); font-family:var(--mono); font-size:.74rem; cursor:pointer; }
+  .cf-row .edit:hover{ text-decoration:underline; }
+  .veh{ margin-top:16px; }
+  .veh label{ display:block; font-family:var(--mono); font-size:.68rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+  select{ width:100%; font-family:var(--sans); font-size:.95rem; color:var(--ink); background:var(--surface); border:1px solid var(--line); border-radius:9px; padding:11px 12px; }
+
+  /* success */
+  .success{ text-align:center; background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:40px 28px; box-shadow:var(--shadow); }
+  .success .tick{ width:64px; height:64px; border-radius:50%; background:var(--avail-wash); color:var(--avail); display:grid; place-items:center; margin:0 auto 16px; }
+  .success h2{ margin:0 0 6px; color:var(--ink); font-size:1.4rem; }
+  .success .code{ font-family:var(--mono); font-size:1.05rem; color:var(--accent-d); letter-spacing:.05em; margin:4px 0 18px; }
+  .assigned{ display:inline-flex; gap:22px; background:var(--raise); border:1px solid var(--line); border-radius:12px; padding:14px 22px; margin-bottom:22px; }
+  .assigned div{ text-align:left; } .assigned .lbl{ font-family:var(--mono); font-size:.64rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); } .assigned .v{ font-weight:650; color:var(--ink); }
+
+  /* summary rail */
+  .rail{ position:sticky; top:88px; background:var(--surface); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; }
+  .rail h3{ margin:0; padding:15px 18px; font-family:var(--mono); font-size:.7rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--line-2); }
+  .rail .items{ padding:6px 18px; }
+  .ri{ display:flex; gap:12px; padding:11px 0; border-bottom:1px solid var(--line-2); align-items:flex-start; }
+  .ri:last-child{ border-bottom:0; }
+  .ri .k{ font-family:var(--mono); font-size:.64rem; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); width:74px; flex:none; padding-top:2px; }
+  .ri .v{ color:var(--ink); font-weight:600; font-size:.92rem; } .ri .v.empty{ color:var(--faint); font-weight:400; }
+  .ri .v small{ display:block; font-weight:400; color:var(--muted); font-size:.8rem; }
+  .rail .total{ display:flex; justify-content:space-between; align-items:baseline; padding:14px 18px; background:var(--raise); border-top:1px solid var(--line); }
+  .rail .total .lbl{ font-family:var(--mono); font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+  .rail .total .amt{ font-family:var(--mono); font-size:1.3rem; font-weight:700; color:var(--ink); }
+  .cta{ display:block; width:100%; border:0; background:var(--accent); color:#fff; font-family:var(--sans); font-weight:700; font-size:1rem; padding:15px; cursor:pointer; transition:background .15s; }
+  .cta:hover:not(:disabled){ background:var(--accent-d); }
+  .cta:disabled{ background:#D9DEE4; color:#fff; cursor:not-allowed; }
+
+  /* mobile summary bar */
+  .mbar{ display:none; }
+  @media(max-width:900px){
+    .rail{ display:none; }
+    .mbar{ display:flex; position:fixed; left:0; right:0; bottom:0; z-index:30; background:rgba(255,255,255,.94); backdrop-filter:blur(10px); border-top:1px solid var(--line); padding:12px clamp(16px,4vw,32px); align-items:center; gap:14px; }
+    .mbar .amt{ font-family:var(--mono); font-weight:700; font-size:1.2rem; color:var(--ink); }
+    .mbar .amt small{ display:block; font-family:var(--mono); font-size:.62rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:400; }
+    .mbar .cta{ margin-left:auto; width:auto; border-radius:10px; padding:14px 26px; }
+  }
+
+  button:focus-visible,select:focus-visible,[tabindex]:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  /* toast */
+  .toast{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--ink); color:#fff; padding:12px 20px; border-radius:10px; font-size:.9rem; opacity:0; pointer-events:none; transition:all .3s; z-index:50; }
+  .toast.on{ opacity:1; transform:translateX(-50%) translateY(0); }
+  @media(max-width:900px){ .toast{ bottom:90px; } }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="in">
+    <div class="logo">
+      <span class="mark" aria-hidden="true">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.3-.6-.6-2.3z"/></svg>
+      </span>
+      <span>Quick&nbsp;Book<small>Vehicle service</small></span>
+    </div>
+    <div class="home"><span class="lbl">Home</span> <span class="mono">12 Oak St</span></div>
+  </div>
+</div>
+
+<nav class="lane" aria-label="Booking steps">
+  <ol id="stepper">
+    <li data-step="0"><span class="n">1</span><span class="t">Service</span></li>
+    <li data-step="1"><span class="n">2</span><span class="t">Where</span></li>
+    <li data-step="2"><span class="n">3</span><span class="t">When</span></li>
+    <li data-step="3"><span class="n">4</span><span class="t">Confirm</span></li>
+  </ol>
+</nav>
+
+<main class="work">
+  <div id="stage"></div>
+  <aside class="rail" id="rail"></aside>
+</main>
+
+<div class="mbar" id="mbar"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================ MOCK DATA (no backend) ============================ */
+const ICONS = {
+  oil:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s5 5.5 5 9a5 5 0 0 1-10 0c0-3.5 5-9 5-9z"/></svg>',
+  brake:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M19 9h2M3 15h2" stroke-linecap="round"/></svg>',
+  diag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2 6 4-14 2 8h6"/></svg>',
+  ev:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3 5 13h6l-1 8 8-11h-6z"/></svg>',
+  tire: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4" stroke-linecap="round"/></svg>',
+  ac:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M4 7l16 10M20 7 4 17M12 6l3-2M12 6 9 4M12 18l3 2M12 18l-3 2"/></svg>',
+  pin:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+  clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  car:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l1.5-4.5A2 2 0 0 1 8.4 7h7.2a2 2 0 0 1 1.9 1.5L19 13v5h-2v-2H7v2H5z"/><circle cx="8" cy="15.5" r="1"/><circle cx="16" cy="15.5" r="1"/></svg>',
+  star: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.8 5.9 21.4 7.3 14.6 2.2 9.9l6.9-.8z"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'
+};
+const SERVICES = [
+  { id:'oil',   name:'Oil Change',        mins:30,  skill:'GENERAL',     price:49,  desc:'Oil & filter replacement' },
+  { id:'tire',  name:'Tire Rotation',     mins:30,  skill:'GENERAL',     price:40,  desc:'Rotate & balance all four' },
+  { id:'ac',    name:'A/C Service',       mins:45,  skill:'GENERAL',     price:95,  desc:'Recharge & leak check' },
+  { id:'brake', name:'Brake Service',     mins:60,  skill:'BRAKES',      price:180, desc:'Pads, discs & fluid' },
+  { id:'diag',  name:'Full Diagnostic',   mins:90,  skill:'DIAGNOSTICS', price:120, desc:'Computer & road test' },
+  { id:'ev',    name:'EV Battery Service',mins:120, skill:'EV',          price:260, desc:'Battery health & software' },
+];
+const DEALERS = [
+  { id:1, name:'Downtown Auto Service', dist:2.3, addr:'42 Market St',  rating:4.8, usual:true,  open:8, close:18, bays:2,
+    techs:[['GENERAL','BRAKES'],['GENERAL','DIAGNOSTICS'],['GENERAL','EV']] },
+  { id:2, name:'Riverside Garage',      dist:5.1, addr:'8 River Rd',    rating:4.5, usual:false, open:8, close:17, bays:3,
+    techs:[['GENERAL','BRAKES'],['GENERAL']] },
+  { id:3, name:'Airport Motors',        dist:8.7, addr:'220 Skyway',    rating:4.2, usual:false, open:9, close:17, bays:2,
+    techs:[['GENERAL','DIAGNOSTICS','EV'],['GENERAL','BRAKES']] },
+  { id:4, name:'Northgate Service Ctr', dist:11.2,addr:'5 North Ave',   rating:4.6, usual:false, open:7, close:19, bays:4,
+    techs:[['GENERAL','BRAKES','DIAGNOSTICS'],['GENERAL','EV'],['GENERAL']] },
+];
+const GARAGE = [ { name:'Toyota Corolla', plate:'AB-1234' }, { name:'Tesla Model 3', plate:'EV-8890' } ];
+const TECH_NAMES = ['Carlos M.','Dana W.','Evan P.','Priya S.','Sam T.','Fiona C.','Grace L.','Hank R.','Iris K.','Jack D.'];
+
+/* ---- deterministic mock availability: seeded existing bookings per dealer/day ---- */
+function rng(seed){ let s=seed>>>0; return ()=>{ s=(s+0x6D2B79F5)>>>0; let t=Math.imul(s^s>>>15,1|s); t=(t+Math.imul(t^t>>>7,61|t))^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function busyBlocks(d, dayOffset){
+  const r = rng(d.id*97 + dayOffset*13 + 7);
+  const n = Math.round(d.bays * (1.2 + r()));         // a handful of existing bookings
+  const skillsPool = [...new Set(d.techs.flat())];
+  const out = [];
+  for(let i=0;i<n;i++){
+    const startH = d.open + Math.floor(r()*(d.close-d.open-1));
+    const startMin = startH*60 + (r()<.5?0:30);
+    const dur = [30,60,90][Math.floor(r()*3)];
+    const skill = skillsPool[Math.floor(r()*skillsPool.length)];
+    out.push({ s:startMin, e:startMin+dur, skill });
+  }
+  return out;
+}
+function techCount(d, skill){ return d.techs.filter(t=>t.includes(skill)).length; }
+function offers(d, svc){ return techCount(d, svc.skill) > 0; }
+function slotsFor(d, svc, dayOffset){
+  const open=d.open*60, close=d.close*60, busy=busyBlocks(d, dayOffset), skilled=techCount(d, svc.skill);
+  const res=[];
+  for(let s=open; s+svc.mins<=close; s+=30){
+    const e=s+svc.mins;
+    const overlap = busy.filter(b=> b.s < e && b.e > s);
+    const freeBays = d.bays - overlap.length;
+    const freeTechs = skilled - overlap.filter(b=> b.skill===svc.skill).length;
+    const left = Math.max(0, Math.min(freeBays, freeTechs));
+    res.push({ start:s, avail:left>0, left });
+  }
+  return res;
+}
+function earliest(d, svc){
+  if(!offers(d,svc)) return null;
+  for(let day=0; day<DAYS; day++){
+    const slot = slotsFor(d,svc,day).find(x=>x.avail);
+    if(slot) return { day, start:slot.start };
+  }
+  return null;
+}
+
+/* ============================ STATE + HELPERS ============================ */
+const DAYS = 4;
+const state = { step:0, max:0, service:null, dealer:null, day:0, slot:null, vehicle:0 };
+const $ = s => document.querySelector(s);
+const el = (h)=>{ const t=document.createElement('template'); t.innerHTML=h.trim(); return t.content.firstElementChild; };
+const money = n => '$'+n;
+function fmtMin(m){ let h=Math.floor(m/60), mm=m%60, ap=h<12?'AM':'PM', h12=((h+11)%12)+1; return `${h12}:${String(mm).padStart(2,'0')} ${ap}`; }
+function dayDate(off){ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+off); return d; }
+function dayLabel(off){ const d=dayDate(off); if(off===0) return 'Today'; if(off===1) return 'Tomorrow'; return d.toLocaleDateString(undefined,{weekday:'short'}); }
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('on'),2200); }
+
+/* ============================ STEP RENDERERS ============================ */
+function renderService(){
+  const s = el(`<section class="panel-anim"><div class="step-head">
+    <p class="kicker">Step 1 of 4</p><h1>What does your car need?</h1>
+    <p>Start with the service — we’ll find shops that can do it and show the soonest openings.</p>
+  </div><div class="svc-grid"></div></section>`);
+  const grid = s.querySelector('.svc-grid');
+  SERVICES.forEach(svc=>{
+    const b = el(`<button class="svc ${state.service?.id===svc.id?'sel':''}" type="button">
+      <span class="ic">${ICONS[svc.id]}</span>
+      <span class="nm">${svc.name}</span>
+      <span class="ds">${svc.desc}</span>
+      <span class="meta"><span class="chip">${svc.mins} min</span><span class="chip">${svc.skill}</span><span class="price">${money(svc.price)}</span></span>
+    </button>`);
+    b.onclick = ()=>{ state.service=svc; state.dealer=null; state.slot=null; go(1); };
+    grid.appendChild(b);
+  });
+  return s;
+}
+
+function renderWhere(){
+  const svc = state.service;
+  const usual = DEALERS.find(d=>d.usual);
+  const sorted = [...DEALERS].sort((a,b)=>a.dist-b.dist);
+  const s = el(`<section class="panel-anim">
+    <button class="back" type="button">← Change service</button>
+    <div class="step-head"><p class="kicker">Step 2 of 4 · ${svc.name}</p>
+      <h1>Where would you like it done?</h1>
+      <p>Shops are ordered by distance from home. Your usual is one tap away.</p></div>
+    <div id="usualSlot"></div>
+    <div class="or">or choose another · sorted by distance</div>
+    <div id="dealList"></div>
+  </section>`);
+  s.querySelector('.back').onclick = ()=>go(0);
+
+  const eu = earliest(usual, svc);
+  const uslot = el(`<button class="usual" type="button">
+    <span class="star">${ICONS.star}</span>
+    <span><span class="nm">Use my usual — ${usual.name}</span>
+      <span class="sub">${usual.dist} km · ${'★'.repeat(Math.round(usual.rating))} ${usual.rating} · ${eu?('earliest '+dayLabel(eu.day)+' '+fmtMin(eu.start)):'no openings this week'}</span></span>
+    <span class="go">Select →</span>
+  </button>`);
+  uslot.onclick = ()=>{ if(!offers(usual,svc)){ toast(usual.name+" doesn’t offer "+svc.name); return; } pickDealer(usual); };
+  s.querySelector('#usualSlot').appendChild(uslot);
+
+  const list = s.querySelector('#dealList');
+  sorted.forEach(d=>{
+    const can = offers(d, svc);
+    const e = can ? earliest(d, svc) : null;
+    const availHtml = !can
+      ? `<span class="avail none">doesn’t offer<br>${svc.name}</span>`
+      : e ? `<span class="avail"><span class="big">${e.left||''}</span>earliest<br>${dayLabel(e.day)} ${fmtMin(e.start)}</span>`
+          : `<span class="avail none">no openings<br>this week</span>`;
+    const b = el(`<button class="deal ${state.dealer?.id===d.id?'sel':''}" type="button" ${can?'':'disabled'}>
+      <span class="dist"><span class="km">${d.dist}</span><span class="u">KM</span></span>
+      <span class="main"><span class="nm">${d.name} ${d.usual?'<span class="tag-usual">Usual</span>':''}</span>
+        <span class="row2"><span>${d.addr}</span><span class="rate">★ ${d.rating}</span><span>Open ${d.open}:00–${d.close}:00</span></span></span>
+      ${availHtml}
+    </button>`);
+    if(can) b.onclick = ()=>pickDealer(d);
+    list.appendChild(b);
+  });
+  return s;
+}
+function pickDealer(d){
+  state.dealer=d;
+  // keep current slot only if still valid; else reset and jump to soonest day with availability
+  state.slot=null;
+  const e = earliest(d, state.service);
+  state.day = e ? e.day : 0;
+  go(2);
+}
+
+function renderWhen(){
+  const { service:svc, dealer:d } = state;
+  const s = el(`<section class="panel-anim">
+    <button class="back" type="button">← Change location</button>
+    <div class="step-head"><p class="kicker">Step 3 of 4 · ${d.name}</p>
+      <h1>Pick a time</h1>
+      <p>${svc.name} takes ${svc.mins} minutes. Times show how many bays are still open.</p></div>
+    <div class="days" id="days"></div>
+    <div id="slotWrap"></div>
+  </section>`);
+  s.querySelector('.back').onclick = ()=>go(1);
+  const days = s.querySelector('#days');
+  for(let off=0; off<DAYS; off++){
+    const dd=dayDate(off);
+    const b=el(`<button class="day ${state.day===off?'sel':''}" type="button"><span class="dow">${dayLabel(off)}</span><span class="dnum">${dd.getDate()}</span></button>`);
+    b.onclick=()=>{ state.day=off; state.slot=null; refresh(); };
+    days.appendChild(b);
+  }
+  const wrap = s.querySelector('#slotWrap');
+  const slots = slotsFor(d, svc, state.day);
+  const anyAvail = slots.some(x=>x.avail);
+  if(!anyAvail){ wrap.appendChild(el(`<p class="noslots">No openings on ${dayLabel(state.day)} — try another day.</p>`)); return s; }
+  const grid = el('<div class="slots"></div>');
+  slots.forEach(sl=>{
+    const b=el(`<button class="slot ${state.slot===sl.start?'sel':''}" type="button" ${sl.avail?'':'disabled'}>
+      <span class="tm">${fmtMin(sl.start)}</span>
+      <span class="lft">${sl.avail?(sl.left+' open'):'full'}</span>
+    </button>`);
+    if(sl.avail) b.onclick=()=>{ state.slot=sl.start; go(3); };
+    grid.appendChild(b);
+  });
+  wrap.appendChild(grid);
+  return s;
+}
+
+function renderConfirm(){
+  const { service:svc, dealer:d } = state;
+  const endMin = state.slot + svc.mins;
+  const s = el(`<section class="panel-anim">
+    <button class="back" type="button">← Change time</button>
+    <div class="step-head"><p class="kicker">Step 4 of 4</p><h1>Confirm your booking</h1>
+      <p>Review the details, choose the vehicle, then confirm.</p></div>
+    <div class="confirm-card">
+      <div class="cf-row"><span class="ic">${ICONS[svc.id]}</span><span><span class="lbl">Service</span><br><span class="val">${svc.name} · ${svc.mins} min</span></span><button class="edit" data-go="0">Edit</button></div>
+      <div class="cf-row"><span class="ic">${ICONS.pin}</span><span><span class="lbl">Location</span><br><span class="val">${d.name}</span> <span style="color:var(--muted);font-family:var(--mono);font-size:.82rem">${d.dist} km · ${d.addr}</span></span><button class="edit" data-go="1">Edit</button></div>
+      <div class="cf-row"><span class="ic">${ICONS.clock}</span><span><span class="lbl">Time</span><br><span class="val">${dayLabel(state.day)} ${dayDate(state.day).toLocaleDateString(undefined,{month:'short',day:'numeric'})} · ${fmtMin(state.slot)}–${fmtMin(endMin)}</span></span><button class="edit" data-go="2">Edit</button></div>
+      <div class="veh"><label for="veh">Which vehicle?</label><select id="veh"></select></div>
+    </div>
+  </section>`);
+  s.querySelector('.back').onclick=()=>go(2);
+  s.querySelectorAll('.edit').forEach(btn=> btn.onclick=()=>go(+btn.dataset.go));
+  const sel=s.querySelector('#veh');
+  GARAGE.forEach((v,i)=> sel.appendChild(el(`<option value="${i}" ${i===state.vehicle?'selected':''}>${v.name} · ${v.plate}</option>`)));
+  sel.onchange=()=>{ state.vehicle=+sel.value; };
+  return s;
+}
+
+function renderSuccess(){
+  const { service:svc, dealer:d } = state;
+  const endMin = state.slot + svc.mins;
+  const code = 'SVC-' + String(1000 + Math.floor(Math.random()*8999));
+  const tech = TECH_NAMES[(d.id + svc.mins) % TECH_NAMES.length];
+  const bay = 'Bay ' + String.fromCharCode(65 + (state.slot/30 % d.bays));
+  const s = el(`<section class="panel-anim"><div class="success">
+    <div class="tick">${ICONS.check}</div>
+    <h2>You’re booked in</h2>
+    <p style="color:var(--muted);margin:0 0 2px">${svc.name} at ${d.name}</p>
+    <p class="code">${code}</p>
+    <div class="assigned">
+      <div><div class="lbl">When</div><div class="v">${dayLabel(state.day)} · ${fmtMin(state.slot)}–${fmtMin(endMin)}</div></div>
+      <div><div class="lbl">Technician</div><div class="v">${tech}</div></div>
+      <div><div class="lbl">Service bay</div><div class="v">${bay}</div></div>
+    </div>
+    <div>
+      <button class="cta" style="border-radius:10px;max-width:260px;margin:0 auto 10px" id="cal" type="button">Add to calendar</button><br>
+      <button class="back" id="again" type="button">Book another service →</button>
+    </div>
+  </div></section>`);
+  s.querySelector('#cal').onclick=()=>toast('Reminder added for '+dayLabel(state.day)+' '+fmtMin(state.slot));
+  s.querySelector('#again').onclick=()=>{ Object.assign(state,{step:0,max:0,service:null,dealer:null,day:0,slot:null,vehicle:0}); render(); };
+  return s;
+}
+
+/* ============================ SUMMARY RAIL + CHROME ============================ */
+function railHtml(){
+  const svc=state.service, d=state.dealer;
+  const price = svc? svc.price : 0;
+  const row=(k,v,empty)=>`<div class="ri"><span class="k">${k}</span><span class="v ${empty?'empty':''}">${v}</span></div>`;
+  const timeVal = state.slot!=null ? `${dayLabel(state.day)} ${fmtMin(state.slot)}<small>${dayDate(state.day).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</small>` : '—';
+  const canConfirm = svc && d && state.slot!=null;
+  const label = state.step<3 ? 'Keep going' : 'Confirm booking';
+  return `<h3>Your booking</h3><div class="items">
+    ${row('Service', svc?`${svc.name}<small>${svc.mins} min</small>`:'Not chosen', !svc)}
+    ${row('Where', d?`${d.name}<small>${d.dist} km away</small>`:'Not chosen', !d)}
+    ${row('When', timeVal, state.slot==null)}
+    ${row('Vehicle', GARAGE[state.vehicle].name, false)}
+  </div>
+  <div class="total"><span class="lbl">Estimated</span><span class="amt">${money(price)}</span></div>
+  <button class="cta" id="railCta" ${canConfirm && state.step===3 ? '' : 'disabled'}>${label}</button>`;
+}
+function renderRail(){
+  $('#rail').innerHTML = railHtml();
+  const svc=state.service, d=state.dealer;
+  $('#mbar').innerHTML = `<div class="amt">${money(svc?svc.price:0)}<small>${svc?svc.name:'Choose a service'}</small></div>
+    <button class="cta" id="mCta" ${svc&&d&&state.slot!=null&&state.step===3?'':'disabled'}>Confirm booking</button>`;
+  const confirm=()=>{ if(state.service&&state.dealer&&state.slot!=null) go(4); };
+  const rc=$('#railCta'); if(rc && state.step===3) rc.onclick=confirm;
+  const mc=$('#mCta'); if(mc) mc.onclick=confirm;
+}
+function renderStepper(){
+  document.querySelectorAll('#stepper li').forEach(li=>{
+    const n=+li.dataset.step;
+    li.classList.toggle('done', n<state.step && state.step<4);
+    li.classList.toggle('active', n===state.step && state.step<4);
+    li.classList.toggle('clickable', n<=state.max && state.step<4);
+    li.onclick = (n<=state.max && state.step<4) ? ()=>go(n) : null;
+  });
+}
+
+/* ============================ ROUTER ============================ */
+const STEPS = [renderService, renderWhere, renderWhen, renderConfirm, renderSuccess];
+function render(){
+  const stage=$('#stage'); stage.innerHTML='';
+  stage.appendChild(STEPS[state.step]());
+  renderStepper(); renderRail();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+function refresh(){ // re-render current step in place (e.g. day change) without scroll
+  const stage=$('#stage'); stage.innerHTML=''; stage.appendChild(STEPS[state.step]()); renderStepper(); renderRail();
+}
+function go(step){
+  // guard: can't skip ahead past what's chosen
+  if(step>0 && !state.service) step=0;
+  if(step>1 && !state.dealer) step=Math.min(step,1);
+  if(step>2 && state.slot==null) step=Math.min(step,2);
+  state.step=step; state.max=Math.max(state.max, Math.min(step,3));
+  render();
+}
+render();
+</script>
+</body>
+</html>

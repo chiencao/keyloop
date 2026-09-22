@@ -24,6 +24,10 @@ appointment** linking customer, vehicle, technician and bay.
 Starts on `http://localhost:8080` with an embedded H2 file DB (`./data/`),
 migrated and seeded by Flyway. Useful URLs:
 
+- **Quick-Book front-end — `http://localhost:8080/`** (or just open
+  `src/main/resources/static/index.html` in a browser — it's fully mocked and needs
+  no backend). A service-first booking flow: service → nearest/usual dealership →
+  open slot → confirm.
 - Swagger UI — `http://localhost:8080/swagger-ui.html`
 - Health — `http://localhost:8080/actuator/health`
 - Metrics (Prometheus) — `http://localhost:8080/actuator/prometheus`
@@ -53,7 +57,7 @@ that proves no overbooking** (8 threads on a capacity-2 slot → exactly 2 confi
 | `POST` | `/api/v1/appointments` | Book an appointment |
 | `GET`  | `/api/v1/appointments/{id}` | Get an appointment |
 | `GET`  | `/api/v1/appointments/availability` | Non-binding availability probe |
-| `GET`  | `/api/v1/dealerships` · `/api/v1/service-types` | Reference data |
+| `GET`  | `/api/v1/dealerships` · `/api/v1/service-types` · `/api/v1/vehicles` | Reference data |
 
 ### Try it (mocked client via cURL)
 
@@ -96,6 +100,7 @@ Example `201` response:
 | Missing/invalid fields | `400` | `Validation failed` (+ `fieldErrors`) |
 | Unknown dealership/vehicle/service type | `404` | `<Resource> not found: <id>` |
 | No bay or qualified technician free | `409` | `No service bay available …` / `No qualified technician …` |
+| Vehicle already booked in an overlapping window | `409` | `Vehicle <id> already has an appointment during …` |
 | Outside dealership opening hours | `422` | `Requested window … is outside opening hours …` |
 
 ## Seed data (for demos/tests)
@@ -116,6 +121,7 @@ src/main/java/com/keyloop
 ├── web/          REST controllers + GlobalExceptionHandler
 ├── dto/          request/response records
 └── config/       OpenAPI metadata
-src/main/resources/db/migration   Flyway V1 schema · V2 seed
-docs/             system-design.md · openapi.json · curl-examples.sh
+src/main/resources/static/index.html   Quick-Book front-end (mocked, standalone; also served at /)
+src/main/resources/db/migration   Flyway V1 schema · V2 seed · V3 demo vehicles
+docs/             system-design.md · system-design.html · openapi.json · curl-examples.sh
 ```

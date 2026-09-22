@@ -1,7 +1,9 @@
 package com.keyloop.web;
 
+import com.keyloop.dto.VehicleView;
 import com.keyloop.repository.DealershipRepository;
 import com.keyloop.repository.ServiceTypeRepository;
+import com.keyloop.repository.VehicleRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,16 +18,19 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1")
-@Tag(name = "Reference data", description = "Lookup dealerships and service types")
+@Tag(name = "Reference data", description = "Lookup dealerships, service types and vehicles")
 public class ReferenceDataController {
 
     private final DealershipRepository dealershipRepository;
     private final ServiceTypeRepository serviceTypeRepository;
+    private final VehicleRepository vehicleRepository;
 
     public ReferenceDataController(DealershipRepository dealershipRepository,
-                                   ServiceTypeRepository serviceTypeRepository) {
+                                   ServiceTypeRepository serviceTypeRepository,
+                                   VehicleRepository vehicleRepository) {
         this.dealershipRepository = dealershipRepository;
         this.serviceTypeRepository = serviceTypeRepository;
+        this.vehicleRepository = vehicleRepository;
     }
 
     public record DealershipView(Long id, String name, LocalTime openingTime, LocalTime closingTime) {
@@ -49,5 +54,11 @@ public class ReferenceDataController {
                 .map(s -> new ServiceTypeView(s.getId(), s.getCode(), s.getName(),
                         s.getDurationMinutes(), s.getRequiredSkill()))
                 .toList();
+    }
+
+    @Operation(summary = "List vehicles")
+    @GetMapping("/vehicles")
+    public List<VehicleView> vehicles() {
+        return vehicleRepository.listAll();
     }
 }

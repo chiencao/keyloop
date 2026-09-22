@@ -3,6 +3,7 @@ package com.keyloop.integration;
 import com.keyloop.domain.AppointmentStatus;
 import com.keyloop.dto.AppointmentResponse;
 import com.keyloop.dto.BookingRequest;
+import com.keyloop.exception.DuplicateBookingException;
 import com.keyloop.exception.NoAvailabilityException;
 import com.keyloop.repository.AppointmentRepository;
 import com.keyloop.service.BookingService;
@@ -83,16 +84,34 @@ class SchedulerIntegrationTest {
     @Test
     void rejectsBookingBeyondBayCapacity() {
         // 3 technicians hold GENERAL but only 2 bays exist: 3rd booking must fail.
-        BookingRequest req = new BookingRequest(DEALERSHIP, VEHICLE, OIL_CHANGE, SLOT);
-
-        AppointmentResponse first = bookingService.book(req);
-        AppointmentResponse second = bookingService.book(req);
+        // Distinct vehicles so the same-vehicle guard doesn't mask the bay limit.
+        AppointmentResponse first = bookingService.book(new BookingRequest(DEALERSHIP, 1L, OIL_CHANGE, SLOT));
+        AppointmentResponse second = bookingService.book(new BookingRequest(DEALERSHIP, 2L, OIL_CHANGE, SLOT));
 
         assertThat(first.serviceBay().id()).isNotEqualTo(second.serviceBay().id());
         assertThat(first.technician().id()).isNotEqualTo(second.technician().id());
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> bookingService.book(req))
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> bookingService.book(new BookingRequest(DEALERSHIP, 3L, OIL_CHANGE, SLOT)))
                 .isInstanceOf(NoAvailabilityException.class);
+
+        assertThat(appointmentRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void rejectsSameVehicleDoubleBookingButAllowsOtherVehicles() {
+        bookingService.book(new BookingRequest(DEALERSHIP, 1L, OIL_CHANGE, SLOT)); // 09:00–09:30
+
+        // Same vehicle, overlapping window -> duplicate booking rejected.
+        BookingRequest overlap = new BookingRequest(DEALERSHIP, 1L, OIL_CHANGE, SLOT.plusMinutes(15));
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> bookingService.book(overlap))
+                .isInstanceOf(DuplicateBookingException.class)
+                .hasMessageContaining("already has an appointment");
+
+        // A different vehicle in the same overlapping window is still fine.
+        AppointmentResponse other = bookingService.book(
+                new BookingRequest(DEALERSHIP, 2L, OIL_CHANGE, SLOT.plusMinutes(15)));
+        assertThat(other.status()).isEqualTo("CONFIRMED");
 
         assertThat(appointmentRepository.count()).isEqualTo(2);
     }
@@ -107,10 +126,11 @@ class SchedulerIntegrationTest {
 
         List<Callable<Void>> tasks = new ArrayList<>();
         for (int i = 0; i < threads; i++) {
+            long vehicleId = i + 1;   // distinct vehicle per thread (seeded 1..10)
             tasks.add(() -> {
                 startGate.await();
                 try {
-                    bookingService.book(new BookingRequest(DEALERSHIP, VEHICLE, OIL_CHANGE, SLOT));
+                    bookingService.book(new BookingRequest(DEALERSHIP, vehicleId, OIL_CHANGE, SLOT));
                     success.incrementAndGet();
                 } catch (NoAvailabilityException expected) {
                     rejected.incrementAndGet();

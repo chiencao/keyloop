@@ -9,6 +9,7 @@ import com.keyloop.domain.Vehicle;
 import com.keyloop.dto.AppointmentResponse;
 import com.keyloop.dto.BookingRequest;
 import com.keyloop.exception.BusinessRuleException;
+import com.keyloop.exception.DuplicateBookingException;
 import com.keyloop.exception.NoAvailabilityException;
 import com.keyloop.exception.ResourceNotFoundException;
 import com.keyloop.repository.AppointmentRepository;
@@ -63,7 +64,11 @@ public class BookingService {
     public AppointmentResponse book(BookingRequest request) {
         ServiceType serviceType = serviceTypeRepository.findById(request.serviceTypeId())
                 .orElseThrow(() -> new ResourceNotFoundException("ServiceType", request.serviceTypeId()));
-        Vehicle vehicle = vehicleRepository.findById(request.vehicleId())
+
+        // Lock order: vehicle first, then dealership. Both locks are held for the
+        // whole transaction; a consistent order avoids deadlocks between the
+        // same-vehicle guard and the per-dealership resource serialization.
+        Vehicle vehicle = vehicleRepository.findByIdForUpdate(request.vehicleId())
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle", request.vehicleId()));
 
         // Serialize bookings for this dealership: closes the check-then-act race.
@@ -76,6 +81,13 @@ public class BookingService {
         String hoursViolation = AvailabilityService.validateBusinessHours(dealership, start, end);
         if (hoursViolation != null) {
             throw new BusinessRuleException(hoursViolation);
+        }
+
+        // A vehicle can only be serviced in one place at a time.
+        if (appointmentRepository.existsConfirmedForVehicleOverlapping(vehicle.getId(), start, end)) {
+            throw new DuplicateBookingException(
+                    "Vehicle %d already has an appointment during %s–%s"
+                            .formatted(vehicle.getId(), start, end));
         }
 
         List<Technician> technicians = technicianRepository.findAvailable(

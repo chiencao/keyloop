@@ -2,6 +2,7 @@ package com.keyloop.web;
 
 import com.keyloop.dto.ErrorResponse;
 import com.keyloop.exception.BusinessRuleException;
+import com.keyloop.exception.DuplicateBookingException;
 import com.keyloop.exception.NoAvailabilityException;
 import com.keyloop.exception.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -28,6 +29,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(NoAvailabilityException.class)
     public ResponseEntity<ErrorResponse> handleNoAvailability(NoAvailabilityException ex, HttpServletRequest req) {
+        return build(HttpStatus.CONFLICT, ex.getMessage(), req);
+    }
+
+    @ExceptionHandler(DuplicateBookingException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicate(DuplicateBookingException ex, HttpServletRequest req) {
         return build(HttpStatus.CONFLICT, ex.getMessage(), req);
     }
 

@@ -30,29 +30,29 @@ horizontal scalability, observability, and maintainability. See §7.
 ```mermaid
 flowchart LR
     subgraph Client["Client (mocked)"]
-      UI["Web / mobile app\n(cURL · OpenAPI · tests)"]
+      UI["Web / mobile app<br/>(cURL · OpenAPI · tests)"]
     end
 
     subgraph Edge["Edge"]
-      GW["API Gateway / LB\n(TLS, auth, rate-limit)"]
+      GW["API Gateway / LB<br/>(TLS · auth · rate-limit)"]
     end
 
-    subgraph App["Scheduler Service (Spring Boot, stateless, N replicas)"]
-      C["REST Controllers\n+ validation + error mapping"]
-      AV["AvailabilityService\n(read-only probe)"]
-      BK["BookingService\n(@Transactional, pessimistic lock)"]
+    subgraph App["Scheduler Service (Spring Boot · stateless · N replicas)"]
+      C["REST Controllers<br/>validation + error mapping"]
+      AV["AvailabilityService<br/>(read-only probe)"]
+      BK["BookingService<br/>(@Transactional · pessimistic lock)"]
       R["Spring Data JPA repositories"]
     end
 
     subgraph Data["Persistence"]
-      DB[("Relational DB\nPostgreSQL (prod) / H2 (dev)")]
+      DB[("Relational DB<br/>PostgreSQL prod · H2 dev")]
       FW["Flyway migrations"]
     end
 
     subgraph Obs["Observability"]
-      MET["Prometheus\n/actuator/prometheus"]
-      TR["Tracing (OTLP/Zipkin)"]
-      LOG["Structured logs\n(traceId/spanId)"]
+      MET["Prometheus<br/>/actuator/prometheus"]
+      TR["Tracing (OTLP / Zipkin)"]
+      LOG["Structured logs<br/>(traceId / spanId)"]
     end
 
     UI -->|HTTPS JSON| GW --> C
@@ -145,13 +145,25 @@ The naïve “check availability, then insert” is a classic check-then-act rac
 two concurrent requests can both observe the last bay as free and double-book it.
 The fix used here:
 
-- `BookingService.book` runs in **one transaction** that first takes a
-  **`PESSIMISTIC_WRITE` lock on the dealership row** (`findByIdForUpdate`).
-- This **serializes bookings per dealership**, so each request sees the committed
-  effect of the previous one before it checks and inserts. Different dealerships
-  never contend, so throughput scales horizontally by dealership.
+- `BookingService.book` runs in **one transaction** that takes two pessimistic
+  write locks in a fixed order — **vehicle first, then dealership**
+  (`findByIdForUpdate`).
+- The **dealership lock serializes bookings per dealership**, so each request sees
+  the committed effect of the previous one before it checks resources and inserts.
+  Different dealerships never contend, so throughput scales horizontally by dealership.
+- The **vehicle lock** makes the same-vehicle guard (below) race-safe even across
+  different dealerships. Fixed lock ordering (vehicle → dealership) avoids deadlocks.
 - Proven by `SchedulerIntegrationTest.concurrentBookingsForSameSlot…`: 8 threads
-  hit the same slot with capacity 2 → exactly 2 confirmed, 6 rejected, never 3.
+  (distinct vehicles) hit the same slot with capacity 2 → exactly 2 confirmed,
+  6 rejected, never 3.
+
+**Same-vehicle guard (duplicate booking).** Beyond not over-booking *resources*,
+a vehicle can only be serviced in one place at a time. Before reserving, the
+booking checks — with the same half-open overlap predicate — whether the vehicle
+already has a CONFIRMED appointment in the window, and rejects with **409** if so
+(`DuplicateBookingException`). Because the vehicle row is locked for the
+transaction, two concurrent requests for the same vehicle are serialized and
+cannot both pass.
 
 Trade-off and alternatives (documented for reviewers):
 - *Chosen:* coarse per-dealership pessimistic lock — simplest thing that is
@@ -167,10 +179,18 @@ Trade-off and alternatives (documented for reviewers):
 
 | Method | Path | Purpose | Success | Failure |
 |--------|------|---------|---------|---------|
-| POST | `/api/v1/appointments` | Book (requirements 1–3) | 201 + `Location` | 400 validation · 404 missing ref · 409 no availability · 422 outside hours |
+| POST | `/api/v1/appointments` | Book (requirements 1–3) | 201 + `Location` | 400 validation · 404 missing ref · 409 no availability · 409 duplicate vehicle · 422 outside hours |
 | GET | `/api/v1/appointments/{id}` | Fetch appointment | 200 | 404 |
 | GET | `/api/v1/appointments/availability` | Non-binding probe | 200 | 404 |
-| GET | `/api/v1/dealerships`, `/service-types` | Reference data | 200 | — |
+| GET | `/api/v1/dealerships`, `/service-types`, `/vehicles` | Reference data | 200 | — |
+
+A standalone **Quick-Book front-end** (`src/main/resources/static/index.html`,
+also served at `/`) demonstrates the user experience — a service-first flow
+(service → nearest/usual dealership → open slot → confirm). Per the backend
+brief it **stubs the client layer**: all data is mocked in the browser and slot
+availability is computed from mocked bays + skilled technicians, so it opens and
+runs with no backend. It mirrors the same constraints the API enforces (skill
+match, service duration, resource capacity).
 
 Machine-readable contract: [`docs/openapi.json`](./openapi.json) (also served live
 at `/v3/api-docs`, with Swagger UI at `/swagger-ui.html`). Error bodies share one
@@ -231,6 +251,11 @@ shape (`ErrorResponse`: `timestamp, status, error, message, path, fieldErrors?`)
   and a layered test pyramid (unit / slice / integration).
 - **Security** (deployment) — authN/Z at the gateway; the service trusts an
   authenticated principal and would scope bookings to the caller’s customer id.
+- **Supply chain** — dependencies are scanned (Trivy) in CI; the Spring Boot BOM
+  is kept current and individual transitives are pinned to CVE-patched versions
+  via BOM override properties in `pom.xml` (each pin comments the CVEs it clears).
+  Secrets stay out of source: DB credentials come from environment variables in
+  the `postgres` profile.
 
 ### Roadmap (not implemented)
 Appointment cancellation/reschedule with slot release · idempotency keys ·

@@ -10,6 +10,7 @@ import com.keyloop.domain.Vehicle;
 import com.keyloop.dto.AppointmentResponse;
 import com.keyloop.dto.BookingRequest;
 import com.keyloop.exception.BusinessRuleException;
+import com.keyloop.exception.DuplicateBookingException;
 import com.keyloop.exception.NoAvailabilityException;
 import com.keyloop.exception.ResourceNotFoundException;
 import com.keyloop.repository.AppointmentRepository;
@@ -79,7 +80,7 @@ class BookingServiceTest {
 
     private void stubLookups() {
         when(serviceTypeRepository.findById(1L)).thenReturn(Optional.of(oilChange));
-        when(vehicleRepository.findById(1L)).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(vehicle));
         when(dealershipRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(dealership));
     }
 
@@ -125,6 +126,18 @@ class BookingServiceTest {
         assertThatThrownBy(() -> bookingService.book(request()))
                 .isInstanceOf(NoAvailabilityException.class)
                 .hasMessageContaining("bay");
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    @Test
+    void throwsWhenVehicleAlreadyBooked() {
+        stubLookups();
+        when(appointmentRepository.existsConfirmedForVehicleOverlapping(any(), any(), any()))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> bookingService.book(request()))
+                .isInstanceOf(DuplicateBookingException.class)
+                .hasMessageContaining("already has an appointment");
         verify(appointmentRepository, never()).save(any());
     }
 
