@@ -1,0 +1,22 @@
+# Test overrides: isolated in-memory H2 (no files written), generous lock
+# timeout so the pessimistic-lock concurrency test is not flaky.
+spring:
+  datasource:
+    url: jdbc:h2:mem:scheduler_test;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=10000
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  h2:
+    console:
+      enabled: false
+
+management:
+  tracing:
+    enabled: false
+
+logging:
+  level:
+    com.keyloop: WARN

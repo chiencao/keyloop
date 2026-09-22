@@ -1,0 +1,56 @@
+spring:
+  application:
+    name: keyloop-scheduler
+
+  # Default profile: embedded H2 in file mode -> data persists across restarts,
+  # zero external setup. Switch to the 'postgres' profile for production.
+  datasource:
+    url: jdbc:h2:file:./data/scheduler;DB_CLOSE_DELAY=-1;AUTO_SERVER=TRUE
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate        # schema is owned by Flyway, not Hibernate
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+  h2:
+    console:
+      enabled: true             # http://localhost:8080/h2-console (dev only)
+
+server:
+  port: 8080
+
+# ---- Observability ----
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,loggers
+  endpoint:
+    health:
+      show-details: when_authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      probability: 1.0          # sample everything in dev; lower in prod
+
+# Structured request correlation in logs (traceId/spanId via Micrometer).
+logging:
+  pattern:
+    level: "%5p [${spring.application.name},%X{traceId:-},%X{spanId:-}]"
+  level:
+    com.keyloop: INFO
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs

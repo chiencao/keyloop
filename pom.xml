@@ -7,21 +7,41 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.3.4</version>
+        <version>3.5.16</version>
         <relativePath/>
     </parent>
 
     <groupId>com.example</groupId>
     <artifactId>keyloop</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>keyloop</name>
-    <description>Sample Spring Boot project with unit tests</description>
+    <name>keyloop-scheduler</name>
+    <description>Unified Service Scheduler - appointment booking backend</description>
 
     <properties>
         <java.version>21</java.version>
+        <springdoc.version>2.9.1</springdoc.version>
+
+        <!--
+          CVE-driven dependency pins. These override the versions managed by the
+          Spring Boot BOM to pull in security-patched releases (kept within
+          Spring Boot 3.5's own minor lines to preserve compatibility).
+          Revisit on each Spring Boot upgrade: drop a pin once the BOM's managed
+          version meets or exceeds it.
+        -->
+        <spring-framework.version>6.2.19</spring-framework.version>   <!-- CVE-2025-41249, CVE-2026-4184x, CVE-2026-22737/41/45 -->
+        <spring-data-bom.version>2025.0.13</spring-data-bom.version>  <!-- CVE-2026-41716/41711/41721 (spring-data-commons 3.5.13) -->
+        <tomcat.version>10.1.60</tomcat.version>                      <!-- CVE-2025-24813 (critical) + tomcat DoS/bypass set -->
+        <jackson-bom.version>2.22.3</jackson-bom.version>             <!-- CVE-2026-54512/13/14/15, 59888; GHSA-r7wm-3cxj-wff9 -->
+        <logback.version>1.5.38</logback.version>                    <!-- CVE-2024-12798/12801, CVE-2025-11226, CVE-2026-1225/9828/10532 -->
+        <micrometer.version>1.15.12</micrometer.version>             <!-- CVE-2026-40984 -->
+        <micrometer-tracing.version>1.5.12</micrometer-tracing.version>
+        <commons-lang3.version>3.20.0</commons-lang3.version>        <!-- CVE-2025-48924 -->
+        <log4j2.version>2.26.1</log4j2.version>                      <!-- CVE-2026-49844 -->
+        <postgresql.version>42.7.13</postgresql.version>             <!-- CVE-2025-49146, CVE-2026-42198/54291 -->
     </properties>
 
     <dependencies>
+        <!-- Web / REST -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
@@ -31,6 +51,53 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
+        <!-- Persistence -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Observability: metrics, health, tracing -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-brave</artifactId>
+        </dependency>
+
+        <!-- API documentation (OpenAPI 3 / Swagger UI) -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>${springdoc.version}</version>
+        </dependency>
+
+        <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

@@ -23,3 +23,8 @@ target/
 
 ### Mac ###
 .DS_Store
+
+### Application runtime data (H2 file DB)
+data/
+*.mv.db
+*.trace.db
