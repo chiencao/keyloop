@@ -16,6 +16,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -114,6 +115,25 @@ class SchedulerIntegrationTest {
         assertThat(other.status()).isEqualTo("CONFIRMED");
 
         assertThat(appointmentRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void daySlotsReportsOfferedAndAvailability() throws Exception {
+        String date = LocalDate.of(2030, 6, 3).toString();
+
+        // Dealership 1 offers Oil Change (GENERAL) — slots present and some available.
+        mockMvc.perform(get("/api/v1/appointments/slots")
+                        .param("dealershipId", "1").param("serviceTypeId", "1").param("date", date))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.offered").value(true))
+                .andExpect(jsonPath("$.durationMinutes").value(30))
+                .andExpect(jsonPath("$.slots[0].available").value(true));
+
+        // Dealership 3 (Riverside) has no EV-certified technician -> not offered.
+        mockMvc.perform(get("/api/v1/appointments/slots")
+                        .param("dealershipId", "3").param("serviceTypeId", "4").param("date", date))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.offered").value(false));
     }
 
     @Test

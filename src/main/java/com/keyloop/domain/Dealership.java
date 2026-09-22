@@ -28,6 +28,23 @@ public class Dealership {
     @Column(name = "closing_time", nullable = false)
     private LocalTime closingTime;
 
+    // Storefront attributes (populated by migration; read-only in the app).
+    @Column
+    private String address;
+
+    @Column
+    private Double rating;
+
+    @Column
+    private Double latitude;
+
+    @Column
+    private Double longitude;
+
+    /** Marks the demo user's usual/preferred shop (stand-in for a per-user preference). */
+    @Column
+    private boolean usual;
+
     protected Dealership() {
     }
 
@@ -51,5 +68,25 @@ public class Dealership {
 
     public LocalTime getClosingTime() {
         return closingTime;
+    }
+
+    public String getAddress() {
+        return address;
+    }
+
+    public Double getRating() {
+        return rating;
+    }
+
+    public Double getLatitude() {
+        return latitude;
+    }
+
+    public Double getLongitude() {
+        return longitude;
+    }
+
+    public boolean isUsual() {
+        return usual;
     }
 }

@@ -181,16 +181,18 @@ Trade-off and alternatives (documented for reviewers):
 |--------|------|---------|---------|---------|
 | POST | `/api/v1/appointments` | Book (requirements 1–3) | 201 + `Location` | 400 validation · 404 missing ref · 409 no availability · 409 duplicate vehicle · 422 outside hours |
 | GET | `/api/v1/appointments/{id}` | Fetch appointment | 200 | 404 |
-| GET | `/api/v1/appointments/availability` | Non-binding probe | 200 | 404 |
+| GET | `/api/v1/appointments/availability` | Non-binding probe (one window) | 200 | 404 |
+| GET | `/api/v1/appointments/slots` | Day view of 30-min starts (powers the UI) | 200 | 404 |
 | GET | `/api/v1/dealerships`, `/service-types`, `/vehicles` | Reference data | 200 | — |
 
-A standalone **Quick-Book front-end** (`src/main/resources/static/index.html`,
-also served at `/`) demonstrates the user experience — a service-first flow
-(service → nearest/usual dealership → open slot → confirm). Per the backend
-brief it **stubs the client layer**: all data is mocked in the browser and slot
-availability is computed from mocked bays + skilled technicians, so it opens and
-runs with no backend. It mirrors the same constraints the API enforces (skill
-match, service duration, resource capacity).
+A **Quick-Book front-end** (`src/main/resources/static/index.html`, served at
+`/`) demonstrates the user experience — a service-first flow (service →
+nearest/usual dealership → open slot → confirm) **wired to the live API**. It
+lists real dealerships/services/vehicles, computes distance from stored
+coordinates (haversine), reads day availability from `GET /appointments/slots`,
+and books via `POST /appointments` — so it exercises the same skill-match,
+duration and resource-capacity rules the backend enforces (and shows a 409 if a
+slot is taken between load and booking).
 
 Machine-readable contract: [`docs/openapi.json`](./openapi.json) (also served live
 at `/v3/api-docs`, with Swagger UI at `/swagger-ui.html`). Error bodies share one

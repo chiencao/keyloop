@@ -34,4 +34,8 @@ public interface TechnicianRepository extends JpaRepository<Technician, Long> {
                                    @Param("start") LocalDateTime start,
                                    @Param("end") LocalDateTime end,
                                    Pageable pageable);
+
+    /** Technicians of a dealership with their skills eagerly loaded (for the day-slots view). */
+    @Query("select distinct t from Technician t left join fetch t.skills where t.dealership.id = :dealershipId")
+    List<Technician> findByDealershipWithSkills(@Param("dealershipId") Long dealershipId);
 }

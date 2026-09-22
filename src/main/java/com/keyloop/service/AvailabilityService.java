@@ -1,9 +1,15 @@
 package com.keyloop.service;
 
+import com.keyloop.domain.Appointment;
 import com.keyloop.domain.Dealership;
+import com.keyloop.domain.ServiceBay;
 import com.keyloop.domain.ServiceType;
+import com.keyloop.domain.Technician;
 import com.keyloop.dto.AvailabilityResponse;
+import com.keyloop.dto.DaySlotsResponse;
+import com.keyloop.dto.SlotView;
 import com.keyloop.exception.ResourceNotFoundException;
+import com.keyloop.repository.AppointmentRepository;
 import com.keyloop.repository.DealershipRepository;
 import com.keyloop.repository.ServiceBayRepository;
 import com.keyloop.repository.ServiceTypeRepository;
@@ -12,8 +18,13 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Read-only, non-binding availability probe. Reports whether a qualified
@@ -27,15 +38,18 @@ public class AvailabilityService {
     private final ServiceTypeRepository serviceTypeRepository;
     private final TechnicianRepository technicianRepository;
     private final ServiceBayRepository serviceBayRepository;
+    private final AppointmentRepository appointmentRepository;
 
     public AvailabilityService(DealershipRepository dealershipRepository,
                                ServiceTypeRepository serviceTypeRepository,
                                TechnicianRepository technicianRepository,
-                               ServiceBayRepository serviceBayRepository) {
+                               ServiceBayRepository serviceBayRepository,
+                               AppointmentRepository appointmentRepository) {
         this.dealershipRepository = dealershipRepository;
         this.serviceTypeRepository = serviceTypeRepository;
         this.technicianRepository = technicianRepository;
         this.serviceBayRepository = serviceBayRepository;
+        this.appointmentRepository = appointmentRepository;
     }
 
     @Transactional(readOnly = true)
@@ -60,6 +74,57 @@ public class AvailabilityService {
                 .size();
 
         return AvailabilityResponse.of(desiredStart, end, technicians, bays, null);
+    }
+
+    /**
+     * Availability for every 30-minute start across one business day, computed
+     * in memory from a single appointments query plus the dealership's
+     * technicians and bays. A slot is bookable when a skilled technician and a
+     * bay are both free for the full duration and the start is still in the future.
+     */
+    @Transactional(readOnly = true)
+    public DaySlotsResponse slots(Long dealershipId, Long serviceTypeId, LocalDate date) {
+        Dealership dealership = dealershipRepository.findById(dealershipId)
+                .orElseThrow(() -> new ResourceNotFoundException("Dealership", dealershipId));
+        ServiceType serviceType = serviceTypeRepository.findById(serviceTypeId)
+                .orElseThrow(() -> new ResourceNotFoundException("ServiceType", serviceTypeId));
+
+        int duration = serviceType.getDurationMinutes();
+        String skill = serviceType.getRequiredSkill();
+
+        LocalDateTime dayStart = date.atStartOfDay();
+        LocalDateTime dayEnd = date.plusDays(1).atStartOfDay();
+        List<Appointment> appts = appointmentRepository
+                .findConfirmedForDealershipInWindow(dealershipId, dayStart, dayEnd);
+
+        List<Technician> skilledTechs = technicianRepository.findByDealershipWithSkills(dealershipId).stream()
+                .filter(t -> t.getSkills().contains(skill))
+                .toList();
+        List<ServiceBay> bays = serviceBayRepository.findByDealershipIdOrderById(dealershipId);
+        boolean offered = !skilledTechs.isEmpty();
+
+        int openMin = dealership.getOpeningTime().toSecondOfDay() / 60;
+        int closeMin = dealership.getClosingTime().toSecondOfDay() / 60;
+        LocalDateTime now = LocalDateTime.now();
+
+        List<SlotView> slots = new ArrayList<>();
+        for (int m = openMin; m + duration <= closeMin; m += 30) {
+            LocalDateTime start = date.atTime(m / 60, m % 60);
+            LocalDateTime end = start.plusMinutes(duration);
+
+            List<Appointment> overlap = appts.stream()
+                    .filter(a -> a.getStartTime().isBefore(end) && a.getEndTime().isAfter(start))
+                    .toList();
+            Set<Long> busyTechIds = overlap.stream().map(a -> a.getTechnician().getId()).collect(Collectors.toSet());
+            Set<Long> busyBayIds = overlap.stream().map(a -> a.getServiceBay().getId()).collect(Collectors.toSet());
+
+            int freeTechs = (int) skilledTechs.stream().filter(t -> !busyTechIds.contains(t.getId())).count();
+            int freeBays = (int) bays.stream().filter(b -> !busyBayIds.contains(b.getId())).count();
+            boolean available = offered && freeTechs > 0 && freeBays > 0 && start.isAfter(now);
+
+            slots.add(new SlotView("%02d:%02d".formatted(m / 60, m % 60), available, freeTechs, freeBays));
+        }
+        return new DaySlotsResponse(date, dealershipId, serviceTypeId, duration, offered, slots);
     }
 
     /**

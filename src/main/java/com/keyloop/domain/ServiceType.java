@@ -30,6 +30,13 @@ public class ServiceType {
     @Column(name = "required_skill", nullable = false)
     private String requiredSkill;
 
+    // Storefront attributes (populated by migration).
+    @Column
+    private Integer price;
+
+    @Column
+    private String description;
+
     protected ServiceType() {
     }
 
@@ -62,5 +69,13 @@ public class ServiceType {
 
     public String getRequiredSkill() {
         return requiredSkill;
+    }
+
+    public Integer getPrice() {
+        return price;
+    }
+
+    public String getDescription() {
+        return description;
     }
 }

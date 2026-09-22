@@ -24,10 +24,10 @@ appointment** linking customer, vehicle, technician and bay.
 Starts on `http://localhost:8080` with an embedded H2 file DB (`./data/`),
 migrated and seeded by Flyway. Useful URLs:
 
-- **Quick-Book front-end — `http://localhost:8080/`** (or just open
-  `src/main/resources/static/index.html` in a browser — it's fully mocked and needs
-  no backend). A service-first booking flow: service → nearest/usual dealership →
-  open slot → confirm.
+- **Quick-Book front-end — `http://localhost:8080/`** — a service-first booking flow
+  (service → nearest/usual dealership → open slot → confirm) wired to the **live API**:
+  it lists real dealerships/services/vehicles, computes distance from real coordinates,
+  reads day availability from `/appointments/slots`, and books via `POST /appointments`.
 - Swagger UI — `http://localhost:8080/swagger-ui.html`
 - Health — `http://localhost:8080/actuator/health`
 - Metrics (Prometheus) — `http://localhost:8080/actuator/prometheus`
@@ -56,7 +56,8 @@ that proves no overbooking** (8 threads on a capacity-2 slot → exactly 2 confi
 |--------|------|---------|
 | `POST` | `/api/v1/appointments` | Book an appointment |
 | `GET`  | `/api/v1/appointments/{id}` | Get an appointment |
-| `GET`  | `/api/v1/appointments/availability` | Non-binding availability probe |
+| `GET`  | `/api/v1/appointments/availability` | Non-binding availability probe (single window) |
+| `GET`  | `/api/v1/appointments/slots` | Day view: every 30-min start for a dealership + service on a date |
 | `GET`  | `/api/v1/dealerships` · `/api/v1/service-types` · `/api/v1/vehicles` | Reference data |
 
 ### Try it (mocked client via cURL)
@@ -121,7 +122,8 @@ src/main/java/com/keyloop
 ├── web/          REST controllers + GlobalExceptionHandler
 ├── dto/          request/response records
 └── config/       OpenAPI metadata
-src/main/resources/static/index.html   Quick-Book front-end (mocked, standalone; also served at /)
-src/main/resources/db/migration   Flyway V1 schema · V2 seed · V3 demo vehicles
+src/main/resources/static/index.html   Quick-Book front-end (live, served at /)
+src/main/resources/db/migration   Flyway V1 schema · V2 seed · V3 vehicles · V4 storefront data
+
 docs/             system-design.md · system-design.html · openapi.json · curl-examples.sh
 ```

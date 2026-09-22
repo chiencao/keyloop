@@ -31,4 +31,6 @@ public interface ServiceBayRepository extends JpaRepository<ServiceBay, Long> {
                                    @Param("start") LocalDateTime start,
                                    @Param("end") LocalDateTime end,
                                    Pageable pageable);
+
+    List<ServiceBay> findByDealershipIdOrderById(Long dealershipId);
 }

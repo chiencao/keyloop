@@ -33,17 +33,22 @@ public class ReferenceDataController {
         this.vehicleRepository = vehicleRepository;
     }
 
-    public record DealershipView(Long id, String name, LocalTime openingTime, LocalTime closingTime) {
+    public record DealershipView(Long id, String name, String address, Double rating,
+                                 Double latitude, Double longitude, boolean usual,
+                                 LocalTime openingTime, LocalTime closingTime) {
     }
 
-    public record ServiceTypeView(Long id, String code, String name, int durationMinutes, String requiredSkill) {
+    public record ServiceTypeView(Long id, String code, String name, int durationMinutes,
+                                  String requiredSkill, Integer price, String description) {
     }
 
     @Operation(summary = "List dealerships")
     @GetMapping("/dealerships")
     public List<DealershipView> dealerships() {
         return dealershipRepository.findAll().stream()
-                .map(d -> new DealershipView(d.getId(), d.getName(), d.getOpeningTime(), d.getClosingTime()))
+                .map(d -> new DealershipView(d.getId(), d.getName(), d.getAddress(), d.getRating(),
+                        d.getLatitude(), d.getLongitude(), d.isUsual(),
+                        d.getOpeningTime(), d.getClosingTime()))
                 .toList();
     }
 
@@ -52,7 +57,7 @@ public class ReferenceDataController {
     public List<ServiceTypeView> serviceTypes() {
         return serviceTypeRepository.findAll().stream()
                 .map(s -> new ServiceTypeView(s.getId(), s.getCode(), s.getName(),
-                        s.getDurationMinutes(), s.getRequiredSkill()))
+                        s.getDurationMinutes(), s.getRequiredSkill(), s.getPrice(), s.getDescription()))
                 .toList();
     }
 
