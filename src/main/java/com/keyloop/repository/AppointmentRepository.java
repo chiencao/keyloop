@@ -51,4 +51,16 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
     boolean existsConfirmedForVehicleOverlapping(@Param("vehicleId") Long vehicleId,
                                                  @Param("start") LocalDateTime start,
                                                  @Param("end") LocalDateTime end);
+
+    /** A vehicle's CONFIRMED appointments intersecting [from, to) — any dealership — for the day-slots view. */
+    @Query("""
+            select a from Appointment a
+            where a.vehicle.id = :vehicleId
+              and a.status = com.keyloop.domain.AppointmentStatus.CONFIRMED
+              and a.startTime < :to
+              and a.endTime > :from
+            """)
+    List<Appointment> findConfirmedForVehicleInWindow(@Param("vehicleId") Long vehicleId,
+                                                      @Param("from") LocalDateTime from,
+                                                      @Param("to") LocalDateTime to);
 }

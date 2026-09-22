@@ -83,7 +83,7 @@ public class AvailabilityService {
      * bay are both free for the full duration and the start is still in the future.
      */
     @Transactional(readOnly = true)
-    public DaySlotsResponse slots(Long dealershipId, Long serviceTypeId, LocalDate date) {
+    public DaySlotsResponse slots(Long dealershipId, Long serviceTypeId, LocalDate date, Long vehicleId) {
         Dealership dealership = dealershipRepository.findById(dealershipId)
                 .orElseThrow(() -> new ResourceNotFoundException("Dealership", dealershipId));
         ServiceType serviceType = serviceTypeRepository.findById(serviceTypeId)
@@ -96,6 +96,10 @@ public class AvailabilityService {
         LocalDateTime dayEnd = date.plusDays(1).atStartOfDay();
         List<Appointment> appts = appointmentRepository
                 .findConfirmedForDealershipInWindow(dealershipId, dayStart, dayEnd);
+
+        // The queried vehicle's own bookings (any dealership) — to flag slots it already holds.
+        List<Appointment> vehicleAppts = vehicleId == null ? List.of()
+                : appointmentRepository.findConfirmedForVehicleInWindow(vehicleId, dayStart, dayEnd);
 
         List<Technician> skilledTechs = technicianRepository.findByDealershipWithSkills(dealershipId).stream()
                 .filter(t -> t.getSkills().contains(skill))
@@ -121,8 +125,10 @@ public class AvailabilityService {
             int freeTechs = (int) skilledTechs.stream().filter(t -> !busyTechIds.contains(t.getId())).count();
             int freeBays = (int) bays.stream().filter(b -> !busyBayIds.contains(b.getId())).count();
             boolean available = offered && freeTechs > 0 && freeBays > 0 && start.isAfter(now);
+            boolean mineBooked = vehicleAppts.stream()
+                    .anyMatch(a -> a.getStartTime().isBefore(end) && a.getEndTime().isAfter(start));
 
-            slots.add(new SlotView("%02d:%02d".formatted(m / 60, m % 60), available, freeTechs, freeBays));
+            slots.add(new SlotView("%02d:%02d".formatted(m / 60, m % 60), available, freeTechs, freeBays, mineBooked));
         }
         return new DaySlotsResponse(date, dealershipId, serviceTypeId, duration, offered, slots);
     }

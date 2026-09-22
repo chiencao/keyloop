@@ -58,13 +58,15 @@ public class AppointmentController {
     }
 
     @Operation(summary = "Day availability",
-            description = "Every 30-minute start for a dealership + service on a date, with remaining bays/technicians.")
+            description = "Every 30-minute start for a dealership + service on a date, with remaining "
+                    + "bays/technicians. Pass vehicleId to also flag slots that vehicle already holds.")
     @GetMapping("/slots")
     public DaySlotsResponse slots(
             @RequestParam Long dealershipId,
             @RequestParam Long serviceTypeId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return availabilityService.slots(dealershipId, serviceTypeId, date);
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) Long vehicleId) {
+        return availabilityService.slots(dealershipId, serviceTypeId, date, vehicleId);
     }
 
     @Operation(summary = "Get an appointment by id")

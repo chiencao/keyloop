@@ -112,6 +112,14 @@
   .slot.sel{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-wash); }
   .slot:disabled{ opacity:.45; cursor:not-allowed; }
   .slot:disabled .lft{ color:var(--full); }
+  .slot.mine{ opacity:1; background:var(--accent-wash); border-color:var(--accent-line); cursor:not-allowed; }
+  .slot.mine .tm{ color:var(--accent-d); }
+  .slot.mine .lft{ color:var(--accent-d); }
+
+  .vehpick{ display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+  .vehpick label{ font-family:var(--mono); font-size:.68rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+  .vehpick select{ width:auto; max-width:300px; padding:8px 12px; }
+  .vehpick .ic{ width:30px; height:30px; border-radius:8px; background:var(--raise); color:var(--brand); display:grid; place-items:center; }
   .noslots{ color:var(--muted); font-size:.9rem; padding:20px 0; }
 
   .confirm-card{ background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:22px; box-shadow:var(--shadow); }
@@ -232,6 +240,7 @@ const ICONS = {
   _clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   _star:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.8 5.9 21.4 7.3 14.6 2.2 9.9l6.9-.8z"/></svg>',
   _user:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
+  _car:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l1.5-4.5A2 2 0 0 1 8.4 7h7.2a2 2 0 0 1 1.9 1.5L19 13v5h-2v-2H7v2H5z"/><circle cx="8" cy="15.5" r="1"/><circle cx="16" cy="15.5" r="1"/></svg>',
   _check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'
 };
 const icon = code => ICONS[code] || ICONS._clock;
@@ -252,17 +261,21 @@ function ymd(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDa
 function dayLabel(off){ if(off===0) return 'Today'; if(off===1) return 'Tomorrow'; return dayDate(off).toLocaleDateString(undefined,{weekday:'short'}); }
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('on'),2600); }
 
+function currentVehicleId(){ return VEHICLES[state.vehicle] ? VEHICLES[state.vehicle].id : null; }
 async function fetchSlots(dealerId, serviceId, off){
-  return api(`/appointments/slots?dealershipId=${dealerId}&serviceTypeId=${serviceId}&date=${ymd(dayDate(off))}`);
+  const vid = currentVehicleId();
+  const vq = vid!=null ? `&vehicleId=${vid}` : '';
+  return api(`/appointments/slots?dealershipId=${dealerId}&serviceTypeId=${serviceId}&date=${ymd(dayDate(off))}${vq}`);
 }
+function clearSlotCache(){ for(const k in earliestCache) delete earliestCache[k]; }
 async function earliestFor(dealer, service){
-  const key = `${dealer.id}:${service.id}`;
+  const key = `${dealer.id}:${service.id}:${currentVehicleId()}`;
   if(earliestCache[key]) return earliestCache[key];
   let result = { offered:true, day:null, start:null };
   for(let off=0; off<DAYS; off++){
     const day = await fetchSlots(dealer.id, service.id, off);
     if(!day.offered){ result={offered:false}; break; }
-    const s = day.slots.find(x=>x.available);
+    const s = day.slots.find(x=>x.available && !x.mineBooked);   // ignore slots this vehicle already holds
     if(s){ result={offered:true, day:off, start:s.start}; break; }
   }
   earliestCache[key]=result; return result;
@@ -349,11 +362,21 @@ function renderWhen(){
     <button class="back" type="button">← Change location</button>
     <div class="step-head"><p class="kicker">Step 3 of 4 · ${d.name}</p>
       <h1>Pick a time</h1>
-      <p>${svc.name} takes ${svc.durationMinutes} minutes. Each time shows how many bays are still open.</p></div>
+      <p>${svc.name} takes ${svc.durationMinutes} minutes. Times your car is already booked are marked and can’t be picked.</p></div>
+    <div class="vehpick" id="vehpick"></div>
     <div class="days" id="days"></div>
     <div id="slotWrap"><p class="skeleton">Loading times…</p></div>
   </section>`);
   s.querySelector('.back').onclick = ()=>go(1);
+  const vp = s.querySelector('#vehpick');
+  if(!VEHICLES.length){
+    vp.innerHTML = `<span class="ic">${ICONS._car}</span><span style="color:var(--muted);font-size:.9rem">No vehicles on this account.</span>`;
+  } else {
+    vp.innerHTML = `<span class="ic">${ICONS._car}</span><label>Booking for</label><select id="vehSel"></select>`;
+    const vs = vp.querySelector('#vehSel');
+    VEHICLES.forEach((v,i)=> vs.appendChild(el(`<option value="${i}" ${i===state.vehicle?'selected':''}>${v.make} ${v.model} · VIN …${v.vin.slice(-5)}</option>`)));
+    vs.onchange=()=>{ state.vehicle=+vs.value; state.slot=null; refresh(); };   // re-fetch slots for the chosen car
+  }
   const days = s.querySelector('#days');
   for(let off=0; off<DAYS; off++){
     const dd=dayDate(off);
@@ -368,15 +391,17 @@ async function fillSlots(wrap, d, svc){
   let day;
   try { day = await fetchSlots(d.id, svc.id, state.day); }
   catch(e){ wrap.innerHTML = `<p class="noslots">Couldn’t load times: ${e.message}</p>`; return; }
-  const open = day.slots.filter(x=>x.available);
-  if(!open.length){ wrap.innerHTML = `<p class="noslots">No openings on ${dayLabel(state.day)} — try another day.</p>`; return; }
+  const selectableCount = day.slots.filter(x=>x.available && !x.mineBooked).length;
+  if(!selectableCount){ wrap.innerHTML = `<p class="noslots">No open times on ${dayLabel(state.day)} for this vehicle — try another day.</p>`; return; }
   wrap.innerHTML=''; const grid = el('<div class="slots"></div>');
   day.slots.forEach(sl=>{
+    const selectable = sl.available && !sl.mineBooked;
     const left = Math.min(sl.bays, sl.technicians);
-    const b=el(`<button class="slot ${state.slot===sl.start?'sel':''}" type="button" ${sl.available?'':'disabled'}>
+    const label = sl.mineBooked ? 'Booked' : (sl.available ? (left+' open') : 'full');
+    const b=el(`<button class="slot ${state.slot===sl.start?'sel':''} ${sl.mineBooked?'mine':''}" type="button" ${selectable?'':'disabled'} ${sl.mineBooked?'title="Your car is already booked at this time"':''}>
       <span class="tm">${fmt12(sl.start)}</span>
-      <span class="lft">${sl.available?(left+' open'):'full'}</span></button>`);
-    if(sl.available) b.onclick=()=>{ state.slot=sl.start; go(3); };
+      <span class="lft">${label}</span></button>`);
+    if(selectable) b.onclick=()=>{ state.slot=sl.start; go(3); };
     grid.appendChild(b);
   });
   wrap.appendChild(grid);
@@ -384,29 +409,23 @@ async function fillSlots(wrap, d, svc){
 
 function renderConfirm(){
   const { service:svc, dealer:d } = state;
+  const veh = VEHICLES[state.vehicle];
   const [h,m]=state.slot.split(':').map(Number);
   const endMin = h*60+m+svc.durationMinutes;
   const endStr = `${pad(Math.floor(endMin/60))}:${pad(endMin%60)}`;
   const s = el(`<section class="panel-anim">
     <button class="back" type="button">← Change time</button>
     <div class="step-head"><p class="kicker">Step 4 of 4</p><h1>Confirm your booking</h1>
-      <p>Review the details, choose the vehicle, then confirm.</p></div>
+      <p>Review the details, then confirm.</p></div>
     <div class="confirm-card">
       <div class="cf-row"><span class="ic">${icon(svc.code)}</span><span><span class="lbl">Service</span><br><span class="val">${svc.name} · ${svc.durationMinutes} min</span></span><button class="edit" data-go="0">Edit</button></div>
       <div class="cf-row"><span class="ic">${ICONS._pin}</span><span><span class="lbl">Location</span><br><span class="val">${d.name}</span> <span style="color:var(--muted);font-family:var(--mono);font-size:.82rem">${d.distance.toFixed(1)} km · ${d.address}</span></span><button class="edit" data-go="1">Edit</button></div>
       <div class="cf-row"><span class="ic">${ICONS._clock}</span><span><span class="lbl">Time</span><br><span class="val">${dayLabel(state.day)} ${dayDate(state.day).toLocaleDateString(undefined,{month:'short',day:'numeric'})} · ${fmt12(state.slot)}–${fmt12(endStr)}</span></span><button class="edit" data-go="2">Edit</button></div>
-      <div class="veh"><label for="veh">Which of your vehicles?</label><select id="veh"></select></div>
+      <div class="cf-row"><span class="ic">${ICONS._car}</span><span><span class="lbl">Vehicle</span><br><span class="val">${veh?`${veh.make} ${veh.model}`:'—'}</span> ${veh?`<span style="color:var(--muted);font-family:var(--mono);font-size:.82rem">VIN …${veh.vin.slice(-5)}</span>`:''}</span><button class="edit" data-go="2">Edit</button></div>
     </div>
   </section>`);
   s.querySelector('.back').onclick=()=>go(2);
   s.querySelectorAll('.edit').forEach(btn=> btn.onclick=()=>go(+btn.dataset.go));
-  const sel=s.querySelector('#veh');
-  if(!VEHICLES.length){
-    sel.innerHTML = '<option>No vehicles on this account</option>'; sel.disabled = true;
-  } else {
-    VEHICLES.forEach((v,i)=> sel.appendChild(el(`<option value="${i}" ${i===state.vehicle?'selected':''}>${v.make} ${v.model} · VIN …${v.vin.slice(-5)}</option>`)));
-    sel.onchange=()=>{ state.vehicle=+sel.value; };
-  }
   return s;
 }
 
@@ -438,7 +457,7 @@ async function book(){
   [rc,mc].forEach(b=>{ if(b){ b.disabled=true; b.textContent='Booking…'; }});
   try{
     state.appt = await api('/appointments', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
-    earliestCache[`${d.id}:${svc.id}`]=undefined;   // availability changed
+    clearSlotCache();   // availability changed (this vehicle now has a booking)
     go(4);
   }catch(e){
     [rc,mc].forEach(b=>{ if(b){ b.disabled=false; b.textContent='Confirm booking'; }});

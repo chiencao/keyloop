@@ -30,6 +30,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.everyItem;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -151,6 +152,25 @@ class SchedulerIntegrationTest {
                         .param("dealershipId", "3").param("serviceTypeId", "4").param("date", date))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.offered").value(false));
+    }
+
+    @Test
+    void daySlotsFlagTheVehiclesOwnBookings() throws Exception {
+        bookingService.book(new BookingRequest(DEALERSHIP, 1L, OIL_CHANGE, SLOT)); // 09:00–09:30
+        String date = SLOT.toLocalDate().toString();
+
+        // No vehicleId → the 09:00 slot is not flagged as the caller's.
+        mockMvc.perform(get("/api/v1/appointments/slots")
+                        .param("dealershipId", "1").param("serviceTypeId", "1").param("date", date))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.slots[?(@.start=='09:00')].mineBooked").value(hasItem(false)));
+
+        // vehicleId=1 → the 09:00 slot is flagged, so the UI disables it (no more surprise 409).
+        mockMvc.perform(get("/api/v1/appointments/slots")
+                        .param("dealershipId", "1").param("serviceTypeId", "1").param("date", date)
+                        .param("vehicleId", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.slots[?(@.start=='09:00')].mineBooked").value(hasItem(true)));
     }
 
     @Test
