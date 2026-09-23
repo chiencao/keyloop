@@ -38,6 +38,7 @@ public class BookingService {
 
     private static final Logger log = LoggerFactory.getLogger(BookingService.class);
     private static final PageRequest FIRST = PageRequest.of(0, 1);
+    private static final PageRequest CANDIDATES = PageRequest.of(0, 100);
 
     private final DealershipRepository dealershipRepository;
     private final VehicleRepository vehicleRepository;
@@ -91,19 +92,29 @@ public class BookingService {
         }
 
         List<Technician> technicians = technicianRepository.findAvailable(
-                dealership.getId(), serviceType.getRequiredSkill(), start, end, FIRST);
+                dealership.getId(), serviceType.getRequiredSkill(), start, end, CANDIDATES);
         if (technicians.isEmpty()) {
             throw new NoAvailabilityException(
                     "No qualified technician (skill '%s') available for %s–%s"
                             .formatted(serviceType.getRequiredSkill(), start, end));
         }
 
+        // Honour the customer's chosen technician if they picked one; otherwise auto-assign.
+        Technician technician;
+        if (request.technicianId() != null) {
+            technician = technicians.stream()
+                    .filter(t -> t.getId().equals(request.technicianId()))
+                    .findFirst()
+                    .orElseThrow(() -> new NoAvailabilityException(
+                            "Chosen technician is not available for %s–%s".formatted(start, end)));
+        } else {
+            technician = technicians.get(0);
+        }
+
         List<ServiceBay> bays = serviceBayRepository.findAvailable(dealership.getId(), start, end, FIRST);
         if (bays.isEmpty()) {
             throw new NoAvailabilityException("No service bay available for %s–%s".formatted(start, end));
         }
-
-        Technician technician = technicians.get(0);
         ServiceBay bay = bays.get(0);
 
         Appointment appointment = new Appointment(

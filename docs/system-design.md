@@ -199,7 +199,11 @@ stateDiagram-v2
 The **admin console** (`/admin`) is where staff drive this: sign-off is the
 operational answer to "is this slot still occupied?". There is no login in the
 sample — staff pick their dealership (a stand-in for a per-location staff account)
-and see and manage only that location's requests.
+and see and manage only that location's requests. When booking, the **customer may
+pick a specific qualified, free technician** (`GET …/available-technicians`); if
+they don't, the first qualified, free one is **auto-assigned** — so a booking is
+always fulfillable and never overbooks. The desk manages the lifecycle (sign-off /
+cancel) but does not reassign technicians.
 
 ---
 
@@ -211,6 +215,7 @@ and see and manage only that location's requests.
 | GET | `/api/v1/appointments/{id}` | Fetch appointment | 200 | 404 |
 | GET | `/api/v1/appointments/availability` | Non-binding probe (one window) | 200 | 404 |
 | GET | `/api/v1/appointments/slots` | Day view of 30-min starts (powers the UI) | 200 | 404 |
+| GET | `/api/v1/appointments/available-technicians` | Qualified technicians free for a slot (customer optionally picks) | 200 | 404 |
 | GET | `/api/v1/customers` | Account picker (demo, no auth) | 200 | — |
 | GET | `/api/v1/dealerships`, `/service-types`, `/vehicles?customerId=` | Reference data (vehicles scope to a customer) | 200 | — |
 | GET | `/api/v1/admin/appointments?dealershipId=&status=` | Service-desk: list a location's requests | 200 | — |

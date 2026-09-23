@@ -24,6 +24,13 @@ public record BookingRequest(
         @NotNull(message = "desiredStart is required")
         @Future(message = "desiredStart must be in the future")
         @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
-        LocalDateTime desiredStart
+        LocalDateTime desiredStart,
+
+        /** Optional: the technician the customer chose. Null = auto-assign the first qualified, free one. */
+        Long technicianId
 ) {
+    /** Convenience for callers that don't pick a technician (auto-assign). */
+    public BookingRequest(Long dealershipId, Long vehicleId, Long serviceTypeId, LocalDateTime desiredStart) {
+        this(dealershipId, vehicleId, serviceTypeId, desiredStart, null);
+    }
 }

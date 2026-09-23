@@ -195,6 +195,30 @@ class SchedulerIntegrationTest {
     }
 
     @Test
+    void customerCanChooseTechnicianOrAutoAssign() throws Exception {
+        // The slot exposes the qualified, free technicians the customer may pick.
+        mockMvc.perform(get("/api/v1/appointments/available-technicians")
+                        .param("dealershipId", "1").param("serviceTypeId", "1")
+                        .param("desiredStart", SLOT.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(3));
+
+        // Customer picks technician 2 (Dana) → that's who is assigned.
+        AppointmentResponse chosen = bookingService.book(new BookingRequest(DEALERSHIP, 1L, OIL_CHANGE, SLOT, 2L));
+        assertThat(chosen.technician().id()).isEqualTo(2L);
+
+        // Picking a technician who isn't available/qualified is rejected.
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> bookingService.book(new BookingRequest(DEALERSHIP, 2L, OIL_CHANGE, SLOT, 999L)))
+                .isInstanceOf(NoAvailabilityException.class);
+
+        // No choice → auto-assign a qualified, free technician.
+        AppointmentResponse auto = bookingService.book(new BookingRequest(DEALERSHIP, 3L, OIL_CHANGE, SLOT));
+        assertThat(auto.status()).isEqualTo("CONFIRMED");
+        assertThat(auto.technician().id()).isNotEqualTo(2L); // Dana is busy, so someone else
+    }
+
+    @Test
     void adminEndpointsListScopeAndRejectDoubleSignOff() throws Exception {
         AppointmentResponse a = bookingService.book(new BookingRequest(DEALERSHIP, 1L, OIL_CHANGE, SLOT));
 

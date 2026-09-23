@@ -4,6 +4,7 @@ import com.keyloop.dto.AppointmentResponse;
 import com.keyloop.dto.AvailabilityResponse;
 import com.keyloop.dto.BookingRequest;
 import com.keyloop.dto.DaySlotsResponse;
+import com.keyloop.dto.TechnicianOption;
 import com.keyloop.service.AvailabilityService;
 import com.keyloop.service.BookingService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,6 +24,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.net.URI;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/appointments")
@@ -67,6 +69,16 @@ public class AppointmentController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) Long vehicleId) {
         return availabilityService.slots(dealershipId, serviceTypeId, date, vehicleId);
+    }
+
+    @Operation(summary = "Technicians available for a proposed window",
+            description = "Qualified technicians free for the exact slot, so the customer can choose one (optional).")
+    @GetMapping("/available-technicians")
+    public List<TechnicianOption> availableTechnicians(
+            @RequestParam Long dealershipId,
+            @RequestParam Long serviceTypeId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime desiredStart) {
+        return availabilityService.availableTechnicians(dealershipId, serviceTypeId, desiredStart);
     }
 
     @Operation(summary = "Get an appointment by id")

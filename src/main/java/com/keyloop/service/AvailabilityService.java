@@ -8,6 +8,7 @@ import com.keyloop.domain.Technician;
 import com.keyloop.dto.AvailabilityResponse;
 import com.keyloop.dto.DaySlotsResponse;
 import com.keyloop.dto.SlotView;
+import com.keyloop.dto.TechnicianOption;
 import com.keyloop.exception.ResourceNotFoundException;
 import com.keyloop.repository.AppointmentRepository;
 import com.keyloop.repository.DealershipRepository;
@@ -74,6 +75,19 @@ public class AvailabilityService {
                 .size();
 
         return AvailabilityResponse.of(desiredStart, end, technicians, bays, null);
+    }
+
+    /** Qualified technicians free for a specific proposed window — so the customer can pick one. */
+    @Transactional(readOnly = true)
+    public List<TechnicianOption> availableTechnicians(Long dealershipId, Long serviceTypeId, LocalDateTime desiredStart) {
+        ServiceType serviceType = serviceTypeRepository.findById(serviceTypeId)
+                .orElseThrow(() -> new ResourceNotFoundException("ServiceType", serviceTypeId));
+        LocalDateTime end = desiredStart.plus(serviceType.getDuration());
+        return technicianRepository
+                .findAvailable(dealershipId, serviceType.getRequiredSkill(), desiredStart, end, PageRequest.of(0, 100))
+                .stream()
+                .map(t -> new TechnicianOption(t.getId(), t.getName()))
+                .toList();
     }
 
     /**

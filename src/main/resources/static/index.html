@@ -248,7 +248,7 @@ const DAYS = 4;
 
 /* ============================ STATE + HELPERS ============================ */
 let SERVICES=[], DEALERS=[], VEHICLES=[], CUSTOMERS=[];
-const state = { step:0, max:0, service:null, dealer:null, day:0, slot:null, vehicle:0, userId:null, appt:null };
+const state = { step:0, max:0, service:null, dealer:null, day:0, slot:null, vehicle:0, technician:null, userId:null, appt:null };
 const earliestCache = {};   // key `${dealerId}:${serviceId}` -> {offered, day, start}
 
 const $ = s => document.querySelector(s);
@@ -401,7 +401,7 @@ async function fillSlots(wrap, d, svc){
     const b=el(`<button class="slot ${state.slot===sl.start?'sel':''} ${sl.mineBooked?'mine':''}" type="button" ${selectable?'':'disabled'} ${sl.mineBooked?'title="Your car is already booked at this time"':''}>
       <span class="tm">${fmt12(sl.start)}</span>
       <span class="lft">${label}</span></button>`);
-    if(selectable) b.onclick=()=>{ state.slot=sl.start; go(3); };
+    if(selectable) b.onclick=()=>{ state.slot=sl.start; state.technician=null; go(3); };
     grid.appendChild(b);
   });
   wrap.appendChild(grid);
@@ -416,17 +416,29 @@ function renderConfirm(){
   const s = el(`<section class="panel-anim">
     <button class="back" type="button">← Change time</button>
     <div class="step-head"><p class="kicker">Step 4 of 4</p><h1>Confirm your booking</h1>
-      <p>Review the details, then confirm.</p></div>
+      <p>Review the details, optionally choose your technician, then confirm.</p></div>
     <div class="confirm-card">
       <div class="cf-row"><span class="ic">${icon(svc.code)}</span><span><span class="lbl">Service</span><br><span class="val">${svc.name} · ${svc.durationMinutes} min</span></span><button class="edit" data-go="0">Edit</button></div>
       <div class="cf-row"><span class="ic">${ICONS._pin}</span><span><span class="lbl">Location</span><br><span class="val">${d.name}</span> <span style="color:var(--muted);font-family:var(--mono);font-size:.82rem">${d.distance.toFixed(1)} km · ${d.address}</span></span><button class="edit" data-go="1">Edit</button></div>
       <div class="cf-row"><span class="ic">${ICONS._clock}</span><span><span class="lbl">Time</span><br><span class="val">${dayLabel(state.day)} ${dayDate(state.day).toLocaleDateString(undefined,{month:'short',day:'numeric'})} · ${fmt12(state.slot)}–${fmt12(endStr)}</span></span><button class="edit" data-go="2">Edit</button></div>
       <div class="cf-row"><span class="ic">${ICONS._car}</span><span><span class="lbl">Vehicle</span><br><span class="val">${veh?`${veh.make} ${veh.model}`:'—'}</span> ${veh?`<span style="color:var(--muted);font-family:var(--mono);font-size:.82rem">VIN …${veh.vin.slice(-5)}</span>`:''}</span><button class="edit" data-go="2">Edit</button></div>
+      <div class="veh"><label for="techSel">Technician</label><select id="techSel"><option>Loading…</option></select></div>
     </div>
   </section>`);
   s.querySelector('.back').onclick=()=>go(2);
   s.querySelectorAll('.edit').forEach(btn=> btn.onclick=()=>go(+btn.dataset.go));
+  fillTechnicians(s.querySelector('#techSel'));
   return s;
+}
+
+async function fillTechnicians(sel){
+  sel.innerHTML = '<option value="">Any available technician</option>';
+  try{
+    const desiredStart = `${ymd(dayDate(state.day))}T${state.slot}:00`;
+    const techs = await api(`/appointments/available-technicians?dealershipId=${state.dealer.id}&serviceTypeId=${state.service.id}&desiredStart=${desiredStart}`);
+    techs.forEach(t=> sel.appendChild(el(`<option value="${t.id}" ${state.technician===t.id?'selected':''}>${t.name}</option>`)));
+  }catch(e){ /* leave "Any available" */ }
+  sel.onchange=()=>{ state.technician = sel.value ? +sel.value : null; };
 }
 
 function renderSuccess(){
@@ -444,7 +456,7 @@ function renderSuccess(){
     </div>
     <div><button class="back" id="again" type="button">Book another service →</button></div>
   </div></section>`);
-  s.querySelector('#again').onclick=()=>{ Object.assign(state,{step:0,max:0,service:null,dealer:null,day:0,slot:null,vehicle:0,appt:null}); render(); };
+  s.querySelector('#again').onclick=()=>{ Object.assign(state,{step:0,max:0,service:null,dealer:null,day:0,slot:null,vehicle:0,technician:null,appt:null}); render(); };
   return s;
 }
 
@@ -452,7 +464,7 @@ function renderSuccess(){
 async function book(){
   const { service:svc, dealer:d } = state;
   const desiredStart = `${ymd(dayDate(state.day))}T${state.slot}:00`;
-  const payload = { dealershipId:d.id, vehicleId:VEHICLES[state.vehicle].id, serviceTypeId:svc.id, desiredStart };
+  const payload = { dealershipId:d.id, vehicleId:VEHICLES[state.vehicle].id, serviceTypeId:svc.id, desiredStart, technicianId:state.technician };
   const rc=$('#railCta'), mc=$('#mCta');
   [rc,mc].forEach(b=>{ if(b){ b.disabled=true; b.textContent='Booking…'; }});
   try{
